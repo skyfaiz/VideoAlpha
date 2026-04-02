@@ -32,6 +32,8 @@ def get_client() -> InfinitetalkS3Client:
 
 
 async def handle_upload(file: UploadFile, tmpdir: str) -> str:
+    if not file:
+        return None
     path = os.path.join(tmpdir, file.filename)
     with open(path, "wb") as f:
         content = await file.read()
@@ -41,8 +43,9 @@ async def handle_upload(file: UploadFile, tmpdir: str) -> str:
 
 def run_infinitetalk_job(
     job_id: str,
-    image_path: str,
+    media_path: str,
     audio_path: str,
+    audio_path_2: Optional[str],
     prompt: str,
     width: int,
     height: int,
@@ -55,9 +58,12 @@ def run_infinitetalk_job(
         jobs[job_id]["status"] = "IN_PROGRESS"
         client = get_client()
         
+        # For video input, we need to pass the media_path as image_path
+        # The client will handle it correctly based on input_type
         result = client.create_video_from_files(
-            image_path=image_path,
+            image_path=media_path,
             audio_path=audio_path,
+            audio_path_2=audio_path_2,
             prompt=prompt,
             width=width,
             height=height,
@@ -100,8 +106,10 @@ def run_infinitetalk_job(
 
 @router.post("/submit")
 async def submit(
-    image: UploadFile = File(...),
+    image: UploadFile = File(None),
+    video: UploadFile = File(None),
     audio: UploadFile = File(...),
+    audio_2: UploadFile = File(None),
     prompt: str = Form(...),
     width: int = Form(544),
     height: int = Form(960),
@@ -109,33 +117,52 @@ async def submit(
     input_type: str = Form("image"),
     use_network_volume: bool = Form(False)
 ):
+    # Validate input based on input_type
+    if input_type == "image" and not image:
+        raise HTTPException(status_code=400, detail="Image file required for image input type")
+    if input_type == "video" and not video:
+        raise HTTPException(status_code=400, detail="Video file required for video input type")
+    if person_count == "multi" and not audio_2:
+        raise HTTPException(status_code=400, detail="Second audio file required for multi-person workflow")
+    
     # Validate file sizes (max 200MB each)
     MAX_SIZE = 200 * 1024 * 1024
     
-    image_content = await image.read()
-    if len(image_content) > MAX_SIZE:
-        raise HTTPException(status_code=413, detail="Image file too large (max 200MB)")
-    await image.seek(0)
+    # Validate media file
+    media_file = image if input_type == "image" else video
+    media_content = await media_file.read()
+    if len(media_content) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail=f"{input_type.capitalize()} file too large (max 200MB)")
+    await media_file.seek(0)
     
+    # Validate audio files
     audio_content = await audio.read()
     if len(audio_content) > MAX_SIZE:
         raise HTTPException(status_code=413, detail="Audio file too large (max 200MB)")
     await audio.seek(0)
     
+    if audio_2:
+        audio_2_content = await audio_2.read()
+        if len(audio_2_content) > MAX_SIZE:
+            raise HTTPException(status_code=413, detail="Second audio file too large (max 200MB)")
+        await audio_2.seek(0)
+    
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "IN_QUEUE", "output_path": None, "error": None}
     
     tmpdir = tempfile.mkdtemp()
-    image_path = await handle_upload(image, tmpdir)
+    media_path = await handle_upload(media_file, tmpdir)
     audio_path = await handle_upload(audio, tmpdir)
+    audio_path_2 = await handle_upload(audio_2, tmpdir) if audio_2 else None
     
     loop = asyncio.get_event_loop()
     loop.run_in_executor(
         executor,
         run_infinitetalk_job,
         job_id,
-        image_path,
+        media_path,
         audio_path,
+        audio_path_2,
         prompt,
         width,
         height,

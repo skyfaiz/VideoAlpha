@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Upload, Image, Music } from 'lucide-react';
+import { Upload, Image, Music, Video, Users } from 'lucide-react';
+import MediaPreview from './MediaPreview';
 
 export default function InfinitetalkForm({ onSubmit, isLoading }) {
-  const [image, setImage] = useState(null);
+  const [mediaFile, setMediaFile] = useState(null);
   const [audio, setAudio] = useState(null);
+  const [audio2, setAudio2] = useState(null);
   const [prompt, setPrompt] = useState('A person talking naturally');
   const [width, setWidth] = useState(544);
   const [height, setHeight] = useState(960);
@@ -13,14 +15,22 @@ export default function InfinitetalkForm({ onSubmit, isLoading }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!image || !audio) {
-      alert('Please select both image and audio files');
+    if (!mediaFile || !audio) {
+      alert(`Please select both ${inputType} and audio files`);
+      return;
+    }
+
+    if (personCount === 'multi' && !audio2) {
+      alert('Please select second audio file for multi-person workflow');
       return;
     }
 
     const formData = new FormData();
-    formData.append('image', image);
+    formData.append(inputType === 'image' ? 'image' : 'video', mediaFile);
     formData.append('audio', audio);
+    if (personCount === 'multi' && audio2) {
+      formData.append('audio_2', audio2);
+    }
     formData.append('prompt', prompt);
     formData.append('width', width);
     formData.append('height', height);
@@ -33,34 +43,69 @@ export default function InfinitetalkForm({ onSubmit, isLoading }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Workflow Info Banner */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0">
+            {inputType === 'image' ? <Image className="w-5 h-5 text-blue-600" /> : <Video className="w-5 h-5 text-blue-600" />}
+          </div>
+          <div>
+            <h4 className="font-medium text-blue-900">
+              {inputType === 'image' ? 'I2V' : 'V2V'} {personCount === 'single' ? 'Single' : 'Multi'} Workflow
+            </h4>
+            <p className="text-sm text-blue-700 mt-1">
+              {inputType === 'image' ? 'Image-to-Video' : 'Video-to-Video'} • 
+              {personCount === 'single' ? 'Single person' : 'Multiple people'} • 
+              {personCount === 'multi' ? 'Requires 2 audio files' : 'Requires 1 audio file'}
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Image Upload */}
+        {/* Media Upload (Image or Video) */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            <Image className="inline w-4 h-4 mr-1" /> Image File
+            {inputType === 'image' ? (
+              <><Image className="inline w-4 h-4 mr-1" /> Image File</>
+            ) : (
+              <><Video className="inline w-4 h-4 mr-1" /> Video File</>
+            )}
           </label>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-500 transition-colors">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImage(e.target.files[0])}
-              className="hidden"
-              id="infinitetalk-image"
-              disabled={isLoading}
+          {mediaFile ? (
+            <MediaPreview
+              file={mediaFile}
+              type={inputType}
+              onRemove={() => setMediaFile(null)}
+              label={inputType === 'image' ? 'Source Image' : 'Source Video'}
             />
-            <label htmlFor="infinitetalk-image" className="cursor-pointer">
-              <Upload className="mx-auto h-8 w-8 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">
-                {image ? image.name : 'Click to upload image'}
-              </p>
-            </label>
-          </div>
+          ) : (
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-500 transition-colors">
+              <input
+                type="file"
+                accept={inputType === 'image' ? 'image/*' : 'video/*'}
+                onChange={(e) => setMediaFile(e.target.files[0])}
+                className="hidden"
+                id="infinitetalk-media"
+                disabled={isLoading}
+              />
+              <label htmlFor="infinitetalk-media" className="cursor-pointer">
+                <Upload className="mx-auto h-8 w-8 text-gray-400" />
+                <p className="mt-2 text-sm text-gray-600">
+                  Click to upload {inputType}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {inputType === 'image' ? 'PNG, JPG, JPEG' : 'MP4, AVI, MOV'}
+                </p>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* Audio Upload */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            <Music className="inline w-4 h-4 mr-1" /> Audio File
+            <Music className="inline w-4 h-4 mr-1" /> Audio File {personCount === 'multi' && '(Person 1)'}
           </label>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-500 transition-colors">
             <input
@@ -76,10 +121,41 @@ export default function InfinitetalkForm({ onSubmit, isLoading }) {
               <p className="mt-2 text-sm text-gray-600">
                 {audio ? audio.name : 'Click to upload audio'}
               </p>
+              <p className="mt-1 text-xs text-gray-500">
+                WAV, MP3, M4A, FLAC
+              </p>
             </label>
           </div>
         </div>
       </div>
+
+      {/* Second Audio for Multi-Person */}
+      {personCount === 'multi' && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            <Users className="inline w-4 h-4 mr-1" /> Audio File (Person 2)
+          </label>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-indigo-500 transition-colors">
+            <input
+              type="file"
+              accept="audio/*"
+              onChange={(e) => setAudio2(e.target.files[0])}
+              className="hidden"
+              id="infinitetalk-audio-2"
+              disabled={isLoading}
+            />
+            <label htmlFor="infinitetalk-audio-2" className="cursor-pointer">
+              <Upload className="mx-auto h-8 w-8 text-gray-400" />
+              <p className="mt-2 text-sm text-gray-600">
+                {audio2 ? audio2.name : 'Click to upload second audio'}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                WAV, MP3, M4A, FLAC
+              </p>
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Prompt */}
       <div>
@@ -138,8 +214,8 @@ export default function InfinitetalkForm({ onSubmit, isLoading }) {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
             disabled={isLoading}
           >
-            <option value="single">Single</option>
-            <option value="multiple">Multiple</option>
+            <option value="single">Single Person</option>
+            <option value="multi">Multi Person</option>
           </select>
         </div>
         <div>
@@ -152,8 +228,8 @@ export default function InfinitetalkForm({ onSubmit, isLoading }) {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
             disabled={isLoading}
           >
-            <option value="image">Image</option>
-            <option value="video">Video</option>
+            <option value="image">Image (I2V)</option>
+            <option value="video">Video (V2V)</option>
           </select>
         </div>
       </div>
@@ -176,7 +252,7 @@ export default function InfinitetalkForm({ onSubmit, isLoading }) {
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={isLoading || !image || !audio}
+        disabled={isLoading || !mediaFile || !audio || (personCount === 'multi' && !audio2)}
         className="w-full bg-indigo-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
       >
         {isLoading ? (
