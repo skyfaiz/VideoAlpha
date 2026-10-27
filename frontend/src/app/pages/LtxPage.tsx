@@ -18,10 +18,10 @@ export function LtxPage() {
             style={{ background: 'rgba(139,92,246,0.14)', border: '1px solid rgba(139,92,246,0.3)' }}
           >
             <Sparkles size={11} style={{ color: '#A78BFA' }} />
-            <span style={{ fontSize: '10px', fontWeight: 600, color: '#C4B5FD' }}>LTX 2.5 · Distilled INT8</span>
+            <span style={{ fontSize: '10px', fontWeight: 600, color: '#C4B5FD' }}>LTX 2.5 · Distilled INT8 Pod</span>
           </div>
           <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-            Serverless Endpoint: <code style={{ color: '#22D3EE' }}>7xb7ltktyjogxe</code>
+            Persistent Volume: <code style={{ color: '#22D3EE' }}>ltx25-models (vkqbtcijow · 150 GB)</code>
           </span>
         </div>
 
