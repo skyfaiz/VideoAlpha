@@ -7,6 +7,7 @@ import { getStoredJobs, syncJobsWithBackend, formatRelativeTime, type StoredJob 
 const PAGE_TITLES: Record<string, { label: string; sub: string }> = {
   '/': { label: 'Dashboard', sub: 'Overview & recent activity' },
   '/workflow': { label: 'Create', sub: 'Start a new video generation' },
+  '/ltx': { label: 'LTX Generation', sub: 'LTX 2.5 Distilled INT8 Serverless Studio' },
   '/jobs': { label: 'Jobs', sub: 'Track your generation queue' },
   '/architecture': { label: 'Architecture', sub: 'System flow diagram' },
 };

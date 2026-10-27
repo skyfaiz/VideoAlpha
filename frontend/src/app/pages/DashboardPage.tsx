@@ -176,22 +176,39 @@ export function DashboardPage() {
                 Upload files, pass URLs, volume paths, or Base64 across Single & Multi-Person I2V/V2V workflows.
               </p>
             </div>
-            <motion.button
-              whileHover={{ scale: 1.03, boxShadow: '0 0 30px rgba(139,92,246,0.5)' }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => navigate('/workflow')}
-              className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl flex-shrink-0 w-full sm:w-auto"
-              style={{
-                background: 'linear-gradient(135deg, #8B5CF6, #06B6D4)',
-                border: 'none',
-                cursor: 'pointer',
-                boxShadow: '0 0 20px rgba(139,92,246,0.35)',
-              }}
-            >
-              <Sparkles size={15} className="text-white" />
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>Start Creating</span>
-              <ArrowRight size={14} className="text-white/80" />
-            </motion.button>
+            <div className="flex flex-col sm:flex-row gap-2.5 flex-shrink-0 w-full sm:w-auto">
+              <motion.button
+                whileHover={{ scale: 1.03, boxShadow: '0 0 30px rgba(139,92,246,0.5)' }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('/workflow')}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl w-full sm:w-auto"
+                style={{
+                  background: 'linear-gradient(135deg, #8B5CF6, #06B6D4)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 20px rgba(139,92,246,0.35)',
+                }}
+              >
+                <Sparkles size={15} className="text-white" />
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>InfiniteTalk</span>
+                <ArrowRight size={14} className="text-white/80" />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.03, boxShadow: '0 0 24px rgba(6,182,212,0.4)' }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('/ltx')}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl w-full sm:w-auto"
+                style={{
+                  background: 'rgba(6,182,212,0.16)',
+                  border: '1px solid rgba(6,182,212,0.4)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Film size={15} style={{ color: '#22D3EE' }} />
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#E2E8F0' }}>LTX Generation</span>
+                <ArrowRight size={14} style={{ color: '#22D3EE' }} />
+              </motion.button>
+            </div>
           </div>
         </motion.div>
 

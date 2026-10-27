@@ -24,6 +24,11 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/ltx-app': {
+        target: 'http://localhost:7777',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/ltx-app/, ''),
+      },
     },
   },
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
