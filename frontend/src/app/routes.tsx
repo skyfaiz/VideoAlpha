@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { DashboardPage } from './pages/DashboardPage';
 import { WorkflowPage } from './pages/WorkflowPage';
 import { LtxPage } from './pages/LtxPage';
+import { MinimaxPage } from './pages/MinimaxPage';
 import { JobsPage } from './pages/JobsPage';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 
@@ -14,6 +15,7 @@ export const router = createBrowserRouter([
       { index: true, Component: DashboardPage },
       { path: 'workflow', Component: WorkflowPage },
       { path: 'ltx', Component: LtxPage },
+      { path: 'minimax', Component: MinimaxPage },
       { path: 'jobs', Component: JobsPage },
       { path: 'architecture', Component: ArchitecturePage },
     ],

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MiniMax H3 Studio · On-Demand GPU Pod</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <main class="app-shell">
+        <section class="hero">
+          <p class="eyebrow">MiniMax H3 Studio · Video + 32 kHz Stereo Soundtrack</p>
+          <h1>Direct the scene &amp; sound.</h1>
+          <p class="hero-copy">
+            Deploy MiniMax H3 ComfyUI Pod on demand with shared persistent model storage, configure any of the 14 workflows from the browser, and stop or terminate the Pod when finished.
+          </p>
+        </section>
+
+        <section id="pod-control-panel" class="panel pod-control-panel" aria-label="RunPod GPU Pod Control">
+          <div class="pod-control-header">
+            <div class="pod-control-title-wrap">
+              <div class="pod-badge-row">
+                <span class="payload-label">RunPod GPU Pod</span>
+                <span id="pod-status-badge" class="pod-status-badge pod-status-idle">Checking status...</span>
+              </div>
+              <h2 id="pod-title">MiniMax H3 Dedicated Pod</h2>
+              <p id="pod-subtitle" class="pod-subtitle">
+                Persistent Volume: <code>ltx25-models (vkqbtcijow · 165 GB · EUR-IS-2 → /workspace)</code>
+              </p>
+            </div>
+            <div class="pod-actions-wrap">
+              <select id="pod-gpu-select" class="pod-gpu-select" aria-label="Select GPU Type">
+                <option value="NVIDIA L40S">NVIDIA L40S · 48 GB VRAM ($1.09/hr)</option>
+                <option value="NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 2g.48gb">RTX PRO 6000 MIG · 48 GB VRAM ($1.29/hr)</option>
+                <option value="NVIDIA RTX PRO 6000 Blackwell Server Edition">RTX PRO 6000 Blackwell · 96 GB VRAM ($2.49/hr)</option>
+                <option value="NVIDIA H100 80GB HBM3">NVIDIA H100 · 80 GB HBM3 ($2.69/hr)</option>
+                <option value="NVIDIA GeForce RTX 5090">NVIDIA RTX 5090 · 32 GB VRAM ($0.89/hr)</option>
+              </select>
+              <select id="pod-quant-select" class="pod-gpu-select" aria-label="Select Model Quantization">
+                <option value="int8">Quant: int8 (~80 GB · Default)</option>
+                <option value="fp8">Quant: fp8 (Ada / Hopper / Blackwell)</option>
+                <option value="nvfp4">Quant: nvfp4 (RTX 50xx Blackwell)</option>
+                <option value="bf16">Quant: bf16 (~180 GB Full Precision)</option>
+              </select>
+              <button id="pod-deploy-btn" class="pod-btn pod-btn-primary" type="button">
+                Deploy Pod
+              </button>
+              <button id="pod-start-btn" class="pod-btn pod-btn-primary" type="button" hidden>
+                Start Pod
+              </button>
+              <button id="pod-stop-btn" class="pod-btn pod-btn-warning" type="button" hidden>
+                Stop Pod
+              </button>
+              <button id="pod-terminate-btn" class="pod-btn pod-btn-danger" type="button" hidden>
+                Terminate Pod
+              </button>
+              <a id="pod-comfy-link" class="pod-btn pod-btn-secondary" href="#" target="_blank" rel="noopener noreferrer" hidden>
+                ComfyUI ↗
+              </a>
+              <a id="pod-jupyter-link" class="pod-btn pod-btn-secondary" href="#" target="_blank" rel="noopener noreferrer" hidden>
+                JupyterLab ↗
+              </a>
+              <button id="pod-refresh-btn" class="pod-btn pod-btn-secondary" type="button" title="Refresh Pod status">
+                ↻
+              </button>
+            </div>
+          </div>
+          <details id="pod-logs-details" class="pod-logs-details" hidden>
+            <summary class="pod-logs-summary">Live Pod boot &amp; model provisioning logs</summary>
+            <pre id="pod-logs-output" class="pod-logs-output">Waiting for container logs...</pre>
+          </details>
+        </section>
+
+        <section class="panel workflow-selector-panel" aria-label="Workflow selection">
+          <div class="workflow-category-bar" role="tablist" aria-label="Workflow Category">
+            <button class="mode-pill mode-pill-active" data-category="i2v" type="button">
+              Image to Video
+              <span class="soon-chip">4</span>
+            </button>
+            <button class="mode-pill" data-category="t2v" type="button">
+              Text to Video
+              <span class="soon-chip">4</span>
+            </button>
+            <button class="mode-pill" data-category="r2v" type="button">
+              Reference to Video
+              <span class="soon-chip">2</span>
+            </button>
+            <button class="mode-pill" data-category="refmod" type="button">
+              RefMod Generate
+              <span class="soon-chip">1</span>
+            </button>
+            <button class="mode-pill" data-category="refmod_studio" type="button">
+              RefMod Studio
+              <span class="soon-chip">3</span>
+            </button>
+          </div>
+
+          <div class="workflow-variant-row">
+            <div class="workflow-variant-pills" id="workflow-variant-pills" role="radiogroup" aria-label="Workflow variant"></div>
+          </div>
+
+          <div class="workflow-meta-banner" id="workflow-meta-banner">
+            <div class="workflow-meta-info">
+              <div class="pod-badge-row">
+                <span class="payload-label" id="wf-file-label">workflows/MiniMax H3/MiniMax - I2V - Custom Prompt.json</span>
+                <span class="pod-status-badge pod-status-idle" id="wf-difficulty-badge">Beginner</span>
+                <span class="pod-status-badge pod-status-ready" id="wf-upscale-badge" hidden>2× Latent Upscale</span>
+                <span class="pod-status-badge pod-status-booting" id="wf-autoprompt-badge" hidden>AI Auto Prompt</span>
+              </div>
+              <h3 id="wf-title" class="wf-title">MiniMax H3 image to video</h3>
+              <p id="wf-description" class="wf-description">
+                Turn a photo into an AI video with sound using MiniMax H3 in ComfyUI.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <form id="payload-form" class="controls" novalidate>
+          <section class="prompt-panel panel" id="prompt-panel">
+            <label class="floating-label" id="prompt-floating-label" for="prompt">Prompt</label>
+            <textarea
+              id="prompt"
+              name="prompt"
+              maxlength="10000"
+              placeholder="Describe your scene, camera movement, dialogue, and sound effects..."
+              required
+            ></textarea>
+            <div class="panel-footer">
+              <div class="openrouter-key-wrap" id="openrouter-key-wrap" hidden>
+                <label class="openrouter-key-label" for="openrouter-api-key">OpenRouter API Key (for Auto Prompt):</label>
+                <input
+                  id="openrouter-api-key"
+                  type="password"
+                  class="openrouter-key-input"
+                  placeholder="sk-or-v1-... (or leave blank if set on Pod)"
+                  autocomplete="off"
+                />
+              </div>
+              <span class="counter"><span id="char-count">0</span> chars</span>
+            </div>
+          </section>
+
+          <div class="secondary-grid" id="secondary-grid">
+            <!-- 1. I2V Single Image Upload Panel -->
+            <section
+              id="upload-panel-i2v"
+              class="panel upload-panel"
+              tabindex="0"
+              role="button"
+              aria-controls="source-image"
+            >
+              <input id="source-image" type="file" accept="image/*" hidden />
+              <div id="upload-icon" class="upload-icon" aria-hidden="true">↥</div>
+              <p id="upload-title" class="upload-title">Add First Frame Image</p>
+              <p id="upload-copy" class="upload-copy">Drag and drop or click to upload PNG / JPG / WebP</p>
+              <div id="image-preview-card" class="image-preview-card" hidden>
+                <img id="image-preview" class="image-preview" alt="Uploaded source preview" />
+                <p id="preview-name" class="preview-name"></p>
+              </div>
+            </section>
+
+            <!-- 2. T2V Info Panel -->
+            <section id="upload-panel-t2v" class="panel t2v-info-panel" hidden>
+              <div class="upload-icon" aria-hidden="true">✦</div>
+              <p class="upload-title">Text-to-Video + 32 kHz Audio</p>
+              <p class="upload-copy">
+                No source image required. MiniMax H3 synthesizes video frames and synchronized stereo dialogue, ambience, and sound effects in a single pass.
+              </p>
+            </section>
+
+            <!-- 3. R2V Multi-Reference Manager Panel -->
+            <section id="upload-panel-r2v" class="panel multi-media-panel" hidden>
+              <div class="multi-media-header">
+                <div>
+                  <span class="payload-label">Character &amp; Scene References</span>
+                  <h3 class="multi-media-title">Reference Pack (Images / Video / Audio)</h3>
+                </div>
+                <div class="multi-media-actions">
+                  <input id="r2v-file-input" type="file" accept="image/*,video/*,audio/*" multiple hidden />
+                  <button id="r2v-add-btn" type="button" class="pod-btn pod-btn-secondary">
+                    + Add Reference
+                  </button>
+                </div>
+              </div>
+              <p class="multi-media-hint">
+                Up to 9 images (<code>&lt;Picture 1..9&gt;</code>), 3 videos (<code>&lt;Video 1..3&gt;</code>), and 3 audio files (<code>&lt;Audio 1..3&gt;</code>). Click a tag chip to insert it into your prompt.
+              </p>
+              <div id="r2v-list" class="multi-media-list"></div>
+            </section>
+
+            <!-- 4. RefMod Loader Panel (8 slots) -->
+            <section id="upload-panel-refmod" class="panel multi-media-panel" hidden>
+              <div class="multi-media-header">
+                <div>
+                  <span class="payload-label">Saved Reference Packs</span>
+                  <h3 class="multi-media-title">Load H3 RefMods (Up to 8 Slots)</h3>
+                </div>
+                <button id="refmod-sync-btn" type="button" class="pod-btn pod-btn-secondary" title="Fetch saved RefMods from running Pod">
+                  ↻ Sync from Pod
+                </button>
+              </div>
+              <p class="multi-media-hint">
+                Select or type relative RefMod names under <code>models/refmods/</code> (e.g. <code>people/person_reference_v1</code>).
+              </p>
+              <div id="refmod-slots-list" class="refmod-slots-list"></div>
+            </section>
+
+            <!-- 5. RefMod Studio Pack Builder Panel -->
+            <section id="upload-panel-studio" class="panel multi-media-panel" hidden>
+              <div class="multi-media-header">
+                <div>
+                  <span class="payload-label" id="studio-kind-label">RefMod Studio · Pack Builder</span>
+                  <h3 class="multi-media-title" id="studio-panel-title">Upload Reference Files</h3>
+                </div>
+                <div class="multi-media-actions">
+                  <input id="studio-file-input" type="file" multiple hidden />
+                  <button id="studio-add-btn" type="button" class="pod-btn pod-btn-secondary">
+                    + Select Files
+                  </button>
+                </div>
+              </div>
+              <p class="multi-media-hint" id="studio-panel-hint">
+                Upload 3–5 clear character portraits to extract and save a reusable RefMod on your network volume.
+              </p>
+              <div id="studio-file-list" class="multi-media-list"></div>
+            </section>
+
+            <!-- Right Column: Duration & Aspect Ratio Settings -->
+            <section id="video-settings-panel" class="panel settings-panel">
+              <div class="setting-block" id="duration-setting-block">
+                <div class="setting-row">
+                  <span class="setting-label">Duration</span>
+                  <label class="duration-input" for="seconds-number">
+                    <input
+                      id="seconds-number"
+                      type="number"
+                      min="1"
+                      max="15"
+                      step="1"
+                      value="5"
+                      inputmode="numeric"
+                      aria-label="Duration in seconds"
+                    />
+                    <span>s</span>
+                  </label>
+                </div>
+                <input
+                  id="seconds"
+                  name="seconds"
+                  type="range"
+                  min="1"
+                  max="15"
+                  step="1"
+                  value="5"
+                />
+                <div class="range-markers">
+                  <span id="seconds-min-label">1s</span>
+                  <span id="seconds-max-label">15s</span>
+                </div>
+              </div>
+
+              <div class="setting-divider" id="settings-divider"></div>
+
+              <div class="setting-block" id="aspect-setting-block">
+                <div class="setting-row">
+                  <span class="setting-label">Aspect Ratio</span>
+                  <span class="setting-meta" id="resolution-value">640 × 1120</span>
+                </div>
+                <div class="aspect-grid aspect-grid-wrap" role="radiogroup" aria-label="Aspect ratio">
+                  <button class="aspect-button aspect-button-active" data-aspect-ratio="9:16" type="button">9:16</button>
+                  <button class="aspect-button" data-aspect-ratio="16:9" type="button">16:9</button>
+                  <button class="aspect-button" data-aspect-ratio="1:1" type="button">1:1</button>
+                  <button class="aspect-button" data-aspect-ratio="2:3" type="button">2:3</button>
+                  <button class="aspect-button" data-aspect-ratio="3:2" type="button">3:2</button>
+                  <button class="aspect-button" data-aspect-ratio="3:4" type="button">3:4</button>
+                  <button class="aspect-button" data-aspect-ratio="4:3" type="button">4:3</button>
+                  <button class="aspect-button" data-aspect-ratio="21:9" type="button">21:9</button>
+                </div>
+              </div>
+
+              <div class="metrics-row">
+                <div class="metric-chip">
+                  <span class="metric-label">Frames (17k+5)</span>
+                  <span class="metric-value" id="frames-value">124</span>
+                </div>
+                <div class="metric-chip">
+                  <span class="metric-label">FPS</span>
+                  <span class="metric-value" id="fps-value">24</span>
+                </div>
+                <div class="metric-chip">
+                  <span class="metric-label">Audio</span>
+                  <span class="metric-value">32 kHz</span>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <details id="advanced-panel" class="panel advanced-panel">
+            <summary class="advanced-summary">
+              <span class="payload-label">Advanced workflow settings</span>
+              <span class="advanced-hint">
+                ComfyUI node parameters for the active workflow — prefilled with the template defaults.
+              </span>
+            </summary>
+            <div id="advanced-fields" class="advanced-fields"></div>
+            <div class="advanced-footer">
+              <button id="advanced-reset" type="button" class="secondary-action">
+                Reset to defaults
+              </button>
+            </div>
+          </details>
+
+          <div class="actions">
+            <button id="submit-button" class="primary-action" type="button">
+              Generate Video
+            </button>
+            <button id="generate-button" class="secondary-hero-action" type="submit">
+              Preview Compiled API Payload
+            </button>
+            <p id="helper-copy" class="helper-copy">
+              Submits the compiled ComfyUI API graph and media directly to your active MiniMax H3 Pod (:8188).
+            </p>
+          </div>
+        </form>
+
+        <section id="feedback" class="feedback" aria-live="polite"></section>
+
+        <section id="payload-panel" class="payload-panel panel" hidden>
+          <div class="payload-header">
+            <div>
+              <p class="payload-label">Compiled ComfyUI API Prompt</p>
+              <h2>Workflow payload preview</h2>
+            </div>
+            <div class="payload-actions">
+              <button id="copy-button" class="secondary-action" type="button">Copy JSON</button>
+              <button id="download-button" class="secondary-action" type="button">Download</button>
+            </div>
+          </div>
+          <div id="payload-summary" class="payload-summary"></div>
+          <pre id="payload-output"></pre>
+        </section>
+
+        <section id="response-panel" class="payload-panel panel" hidden>
+          <div class="payload-header">
+            <div>
+              <p class="payload-label">Response</p>
+              <h2>Generation result</h2>
+            </div>
+          </div>
+          <div id="response-summary" class="payload-summary"></div>
+          <p id="response-status" class="response-status" hidden></p>
+          <div id="response-texts" class="response-texts" hidden></div>
+          <div id="response-media" class="response-media" hidden></div>
+          <pre id="response-output" hidden></pre>
+        </section>
+      </main>
+    </div>
+
+    <script src="static/app.js" defer></script>
+  </body>
+</html>

@@ -29,6 +29,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/ltx-app/, ''),
       },
+      '/minimax-app': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.

@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     INFINITETALK_ENDPOINT_ID: str
     WANANIMATE_ENDPOINT_ID: str
     RUNPOD_API_KEY: str
+    RUNPOD_MCP_URL: str = "https://mcp.runpod.io/"
+    OPENROUTER_API_KEY: str = ""
 
     # S3
     S3_ENDPOINT_URL: str

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import {
-  Video, ArrowRight, Sparkles, Film, Users, Layers, Plus, CheckCircle, Clock, XCircle, Loader
+  Video, ArrowRight, Sparkles, Film, Clapperboard, Users, Layers, Plus, CheckCircle, Clock, XCircle, Loader
 } from 'lucide-react';
 import {
   getStoredJobs,
@@ -207,6 +207,21 @@ export function DashboardPage() {
                 <Film size={15} style={{ color: '#22D3EE' }} />
                 <span style={{ fontSize: '13px', fontWeight: 700, color: '#E2E8F0' }}>LTX Generation</span>
                 <ArrowRight size={14} style={{ color: '#22D3EE' }} />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.03, boxShadow: '0 0 24px rgba(236,72,153,0.4)' }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('/minimax')}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl w-full sm:w-auto"
+                style={{
+                  background: 'rgba(236,72,153,0.16)',
+                  border: '1px solid rgba(236,72,153,0.4)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Clapperboard size={15} style={{ color: '#F472B6' }} />
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#E2E8F0' }}>MiniMax H3</span>
+                <ArrowRight size={14} style={{ color: '#F472B6' }} />
               </motion.button>
             </div>
           </div>

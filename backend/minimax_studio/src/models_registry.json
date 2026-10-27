@@ -1,0 +1,96 @@
+{
+ "minimax_h3_audio_vae_fp32.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
+  "subdir": "vae"
+ },
+ "minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors": {
+  "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors",
+  "subdir": "loras"
+ },
+ "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors": {
+  "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+  "subdir": "loras"
+ },
+ "minimax_h3_hyperflow_8step_v1.0_comfyui_bf16.safetensors": {
+  "url": "https://huggingface.co/drbaph/MiniMax-H3-Turbo-Lora-ComfyUI/resolve/bb2bc497cbaca89dadd0bcf1856eed4f8275be20/minimax_h3_hyperflow_8step_v1.0_comfyui_bf16.safetensors",
+  "subdir": "loras",
+  "min_size_mb": 3700
+ },
+ "minimax_h3_hyperflow_8step_v1.0_comfyui_pruned_bf16.safetensors": {
+  "url": "https://huggingface.co/drbaph/MiniMax-H3-Turbo-Lora-ComfyUI/resolve/bb2bc497cbaca89dadd0bcf1856eed4f8275be20/minimax_h3_hyperflow_8step_v1.0_comfyui_pruned_bf16.safetensors",
+  "subdir": "loras",
+  "min_size_mb": 3700
+ },
+ "custom_node_hyperflow_8step_v1.0_comfyui.safetensors": {
+  "url": "https://huggingface.co/drbaph/Hyperflow-Comfyui/resolve/2cea953918c1f800e4d6d15304d65947b220ddc7/custom_node_hyperflow_8step_v1.0_comfyui.safetensors",
+  "subdir": "hyperflow",
+  "min_size_mb": 3700
+ },
+ "minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors": {
+  "url": "https://huggingface.co/LBH-123-AI/Minimax_h3_latent_Upscaler/resolve/main/minimax_h3_latent_upscaler_3d_conv_v1/minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors",
+  "subdir": "latent_upscale_models",
+  "min_size_mb": 650
+ },
+ "minimax_h3_fl2va_bf16.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_bf16.safetensors",
+  "subdir": "diffusion_models"
+ },
+ "minimax_h3_fl2va_pruned_fp8_scaled.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+  "subdir": "diffusion_models"
+ },
+ "minimax_h3_fl2va_pruned_int8_convrot.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+  "subdir": "diffusion_models"
+ },
+ "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors": {
+  "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+  "subdir": "loras"
+ },
+ "minimax_h3_ref2va_bf16.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_bf16.safetensors",
+  "subdir": "diffusion_models"
+ },
+ "minimax_h3_ref2va_pruned_fp8_scaled.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_fp8_scaled.safetensors",
+  "subdir": "diffusion_models"
+ },
+ "minimax_h3_ref2va_pruned_int8_convrot.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+  "subdir": "diffusion_models"
+ },
+ "minimax_h3_video_vae_fp16.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+  "subdir": "vae"
+ },
+ "qwen3vl_32b_minimax_h3_int8_convrot.safetensors": {
+  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+  "subdir": "text_encoders"
+ },
+ "taeh3.safetensors": {
+  "url": "https://huggingface.co/Hearmeman/comfyui-template-assets/resolve/main/vae_approx/taeh3.safetensors",
+  "subdir": "vae_approx",
+  "min_size_mb": 5,
+  "upstream_url": "https://huggingface.co/Kijai/MiniMax-H3-TAE/resolve/main/vae_approx/taeh3.safetensors"
+ },
+ "Viggle-Animate-pruned_rank8_bf16.safetensors": {
+  "url": "https://huggingface.co/DeepBeepMeep/MiniMax-H3/resolve/main/Viggle-Animate-pruned_rank8_bf16.safetensors",
+  "subdir": "diffusion_models",
+  "min_size_mb": 38000
+ },
+ "viggle_animate_dmd_lora.safetensors": {
+  "url": "https://huggingface.co/drbaph/Viggle-Animate-ComfyUI/resolve/main/loras/viggle_animate_dmd_lora.safetensors",
+  "subdir": "loras",
+  "min_size_mb": 3500
+ },
+ "fixed_embed_fwd_anyframe.safetensors": {
+  "url": "https://huggingface.co/drbaph/Viggle-Animate-ComfyUI/resolve/main/text_cond/fixed_embed_fwd_anyframe.safetensors",
+  "subdir": "text_cond",
+  "min_size_mb": 3
+ },
+ "rife426.pth": {
+  "url": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/releases/download/models/rife426.pth",
+  "subdir": "frame_interpolation",
+  "min_size_mb": 20
+ }
+}

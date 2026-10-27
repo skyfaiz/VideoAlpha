@@ -7,7 +7,8 @@ import { getStoredJobs, syncJobsWithBackend, formatRelativeTime, type StoredJob 
 const PAGE_TITLES: Record<string, { label: string; sub: string }> = {
   '/': { label: 'Dashboard', sub: 'Overview & recent activity' },
   '/workflow': { label: 'Create', sub: 'Start a new video generation' },
-  '/ltx': { label: 'LTX Generation', sub: 'LTX 2.5 Distilled INT8 Serverless Studio' },
+  '/ltx': { label: 'LTX Generation', sub: 'LTX 2.5 Distilled INT8 Serverless & Pod Studio' },
+  '/minimax': { label: 'MiniMax H3 Studio', sub: 'On-Demand Pod · 14 Workflows (I2V, T2V, R2V, RefMod, 2× Upscale)' },
   '/jobs': { label: 'Jobs', sub: 'Track your generation queue' },
   '/architecture': { label: 'Architecture', sub: 'System flow diagram' },
 };
