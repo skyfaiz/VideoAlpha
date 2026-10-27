@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, Sparkles, Briefcase, GitBranch,
-  Settings, ChevronLeft, ChevronRight, Zap, Video
+  Settings, ChevronLeft, Video
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -31,7 +31,7 @@ export function Sidebar({ collapsed, onToggle, onSettingsOpen }: SidebarProps) {
     <motion.aside
       animate={{ width: collapsed ? 64 : 220 }}
       transition={{ type: 'spring', stiffness: 350, damping: 35 }}
-      className="flex-shrink-0 flex flex-col relative z-20"
+      className="hidden md:flex flex-shrink-0 flex-col relative z-20"
       style={{
         background: 'rgba(15,23,42,0.95)',
         borderRight: '1px solid rgba(255,255,255,0.06)',
@@ -40,15 +40,23 @@ export function Sidebar({ collapsed, onToggle, onSettingsOpen }: SidebarProps) {
       }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 flex-shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', minHeight: 68 }}>
+      <div
+        className="flex items-center gap-3 px-4 py-5 flex-shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', minHeight: 68 }}
+      >
         <motion.div
           className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center"
           style={{
             background: 'linear-gradient(135deg, #8B5CF6, #06B6D4)',
             boxShadow: '0 0 20px rgba(139,92,246,0.5)',
           }}
-          animate={{ boxShadow: ['0 0 20px rgba(139,92,246,0.5)', '0 0 30px rgba(6,182,212,0.6)', '0 0 20px rgba(139,92,246,0.5)'] }}
+          animate={{
+            boxShadow: [
+              '0 0 20px rgba(139,92,246,0.5)',
+              '0 0 30px rgba(6,182,212,0.6)',
+              '0 0 20px rgba(139,92,246,0.5)',
+            ],
+          }}
           transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
         >
           <Video size={15} className="text-white" />
@@ -62,7 +70,16 @@ export function Sidebar({ collapsed, onToggle, onSettingsOpen }: SidebarProps) {
               transition={{ duration: 0.2 }}
               className="overflow-hidden whitespace-nowrap"
             >
-              <div style={{ fontSize: '15px', fontWeight: 800, background: 'linear-gradient(90deg, #A78BFA, #22D3EE)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.02em' }}>
+              <div
+                style={{
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  background: 'linear-gradient(90deg, #A78BFA, #22D3EE)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  letterSpacing: '-0.02em',
+                }}
+              >
                 VideoAlpha
               </div>
               <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', marginTop: -1 }}>
@@ -97,8 +114,10 @@ export function Sidebar({ collapsed, onToggle, onSettingsOpen }: SidebarProps) {
                     transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                   />
                 )}
-                <div className="relative flex-shrink-0 flex items-center justify-center"
-                  style={{ width: 20, color: active ? '#A78BFA' : 'rgba(255,255,255,0.4)' }}>
+                <div
+                  className="relative flex-shrink-0 flex items-center justify-center"
+                  style={{ width: 20, color: active ? '#A78BFA' : 'rgba(255,255,255,0.4)' }}
+                >
                   <Icon size={17} />
                   {active && (
                     <motion.div
@@ -116,7 +135,12 @@ export function Sidebar({ collapsed, onToggle, onSettingsOpen }: SidebarProps) {
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -8 }}
                       transition={{ duration: 0.15 }}
-                      style={{ fontSize: '13px', fontWeight: active ? 600 : 400, color: active ? '#C4B5FD' : 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: active ? 600 : 400,
+                        color: active ? '#C4B5FD' : 'rgba(255,255,255,0.5)',
+                        whiteSpace: 'nowrap',
+                      }}
                     >
                       {label}
                     </motion.span>
@@ -157,7 +181,11 @@ export function Sidebar({ collapsed, onToggle, onSettingsOpen }: SidebarProps) {
           onClick={onToggle}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl"
           whileHover={{ background: 'rgba(255,255,255,0.04)' }}
-          style={{ border: '1px solid rgba(255,255,255,0.06)', minHeight: 42, justifyContent: collapsed ? 'center' : 'flex-start' }}
+          style={{
+            border: '1px solid rgba(255,255,255,0.06)',
+            minHeight: 42,
+            justifyContent: collapsed ? 'center' : 'flex-start',
+          }}
         >
           <motion.div
             animate={{ rotate: collapsed ? 180 : 0 }}
@@ -181,5 +209,54 @@ export function Sidebar({ collapsed, onToggle, onSettingsOpen }: SidebarProps) {
         </motion.button>
       </div>
     </motion.aside>
+  );
+}
+
+export function MobileBottomNav({ onSettingsOpen }: { onSettingsOpen: () => void }) {
+  const location = useLocation();
+
+  const isActive = (to: string, exact = false) => {
+    if (exact) return location.pathname === to;
+    return location.pathname.startsWith(to);
+  };
+
+  return (
+    <nav
+      className="md:hidden flex-shrink-0 flex items-center justify-around px-2 py-1.5 z-30"
+      style={{
+        background: 'rgba(10,16,32,0.96)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(20px)',
+      }}
+    >
+      {NAV_ITEMS.map(({ to, icon: Icon, label, exact }) => {
+        const active = isActive(to, exact);
+        return (
+          <NavLink key={to} to={to} className="flex-1">
+            <div
+              className="flex flex-col items-center justify-center py-1.5 rounded-xl transition-colors"
+              style={{
+                background: active ? 'rgba(139,92,246,0.16)' : 'transparent',
+                color: active ? '#C4B5FD' : 'rgba(255,255,255,0.45)',
+              }}
+            >
+              <Icon size={18} style={{ color: active ? '#A78BFA' : 'rgba(255,255,255,0.45)' }} />
+              <span style={{ fontSize: '10px', fontWeight: active ? 600 : 400, marginTop: 2 }}>
+                {label === 'Architecture' ? 'Flow' : label}
+              </span>
+            </div>
+          </NavLink>
+        );
+      })}
+      <button
+        type="button"
+        onClick={onSettingsOpen}
+        className="flex-1 flex flex-col items-center justify-center py-1.5 rounded-xl"
+        style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.45)' }}
+      >
+        <Settings size={18} style={{ color: 'rgba(255,255,255,0.45)' }} />
+        <span style={{ fontSize: '10px', marginTop: 2 }}>Settings</span>
+      </button>
+    </nav>
   );
 }

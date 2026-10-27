@@ -105,9 +105,8 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="fixed right-0 top-0 bottom-0 z-50 flex flex-col overflow-hidden"
+            className="fixed right-0 top-0 bottom-0 z-50 flex flex-col overflow-hidden w-full max-w-[360px]"
             style={{
-              width: 360,
               background: 'rgba(15,23,42,0.98)',
               backdropFilter: 'blur(24px)',
               borderLeft: '1px solid rgba(255,255,255,0.08)',

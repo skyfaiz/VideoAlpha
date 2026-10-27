@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import base64
 import tempfile
@@ -6,6 +7,7 @@ import shutil
 import uuid
 import asyncio
 import re
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Optional
 
@@ -18,8 +20,30 @@ from clients import InfinitetalkS3Client
 router = APIRouter()
 executor = ThreadPoolExecutor(max_workers=4)
 
-# In-memory job store
-jobs: Dict[str, dict] = {}
+JOBS_FILE = "outputs/jobs_history.json"
+
+
+def _load_jobs() -> Dict[str, dict]:
+    try:
+        if os.path.exists(JOBS_FILE):
+            with open(JOBS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_jobs():
+    try:
+        os.makedirs(os.path.dirname(JOBS_FILE), exist_ok=True)
+        with open(JOBS_FILE, "w", encoding="utf-8") as f:
+            json.dump(jobs, f, indent=2)
+    except Exception:
+        pass
+
+
+# Persistent job store (only real submitted jobs)
+jobs: Dict[str, dict] = _load_jobs()
 
 DATA_URI_RE = re.compile(r"^data:[^;]+;base64,", re.IGNORECASE)
 
@@ -92,15 +116,34 @@ async def resolve_input(
     return None
 
 
+def _format_size(num_bytes: int) -> str:
+    if num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.0f} KB"
+    return f"{num_bytes / (1024 * 1024):.1f} MB"
+
+
 def run_infinitetalk_job(job_id: str, input_data: Dict):
     try:
-        jobs[job_id]["status"] = "IN_PROGRESS"
+        if job_id in jobs:
+            jobs[job_id]["status"] = "IN_PROGRESS"
+            _save_jobs()
         client = get_client()
 
         rp_job_id = client.submit_job(input_data)
         if not rp_job_id:
-            jobs[job_id] = {"status": "FAILED", "output_path": None, "error": "Job submission failed"}
+            if job_id in jobs:
+                jobs[job_id].update({
+                    "status": "FAILED",
+                    "output_path": None,
+                    "error": "Job submission failed",
+                    "completed_at": datetime.now(timezone.utc).isoformat()
+                })
+                _save_jobs()
             return
+
+        if job_id in jobs:
+            jobs[job_id]["runpod_job_id"] = rp_job_id
+            _save_jobs()
 
         result = client.wait_for_completion(rp_job_id)
 
@@ -109,17 +152,43 @@ def run_infinitetalk_job(job_id: str, input_data: Dict):
             os.makedirs("outputs", exist_ok=True)
 
             if client.save_video_result(result, out_path):
-                jobs[job_id] = {"status": "COMPLETED", "output_path": out_path, "error": None}
+                size_str = _format_size(os.path.getsize(out_path)) if os.path.exists(out_path) else None
+                if job_id in jobs:
+                    jobs[job_id].update({
+                        "status": "COMPLETED",
+                        "output_path": out_path,
+                        "size": size_str,
+                        "error": None,
+                        "completed_at": datetime.now(timezone.utc).isoformat()
+                    })
+                    _save_jobs()
             else:
-                jobs[job_id] = {"status": "FAILED", "output_path": None, "error": "Failed to save video result"}
+                if job_id in jobs:
+                    jobs[job_id].update({
+                        "status": "FAILED",
+                        "output_path": None,
+                        "error": "Failed to save video result",
+                        "completed_at": datetime.now(timezone.utc).isoformat()
+                    })
+                    _save_jobs()
         else:
-            jobs[job_id] = {
+            if job_id in jobs:
+                jobs[job_id].update({
+                    "status": "FAILED",
+                    "output_path": None,
+                    "error": result.get("error", "Unknown error"),
+                    "completed_at": datetime.now(timezone.utc).isoformat()
+                })
+                _save_jobs()
+    except Exception as e:
+        if job_id in jobs:
+            jobs[job_id].update({
                 "status": "FAILED",
                 "output_path": None,
-                "error": result.get("error", "Unknown error")
-            }
-    except Exception as e:
-        jobs[job_id] = {"status": "FAILED", "output_path": None, "error": str(e)}
+                "error": str(e),
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            })
+            _save_jobs()
 
 
 @router.post("/submit")
@@ -200,8 +269,38 @@ async def submit(
                 raise HTTPException(status_code=413, detail=f"{f.filename} too large (max 200MB)")
             await f.seek(0)
 
+    wf_prefix = "I2V" if input_type == "image" else "V2V"
+    wf_suffix = "Single" if person_count == "single" else "Multi"
+    workflow_label = f"{wf_prefix} {wf_suffix}"
+
+    if media_upload and media_upload.filename:
+        media_name = media_upload.filename
+    elif media_url:
+        media_name = media_url.rstrip("/").split("/")[-1] or media_url
+    elif media_path:
+        media_name = os.path.basename(media_path) or media_path
+    else:
+        media_name = f"{media_field}_base64"
+
     job_id = str(uuid.uuid4())
-    jobs[job_id] = {"status": "IN_QUEUE", "output_path": None, "error": None}
+    jobs[job_id] = {
+        "job_id": job_id,
+        "status": "IN_QUEUE",
+        "workflow_type": workflow_label,
+        "input_type": input_type,
+        "person_count": person_count,
+        "name": media_name,
+        "prompt": prompt,
+        "resolution": f"{width}×{height}",
+        "media_mode": media_input_mode,
+        "audio_mode": audio_input_mode,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": None,
+        "size": None,
+        "output_path": None,
+        "error": None
+    }
+    _save_jobs()
 
     tmpdir = tempfile.mkdtemp()
     client = get_client()
@@ -242,16 +341,19 @@ async def submit(
                 tmpdir, "input/infinitetalk", client
             )
             if audio_2_result:
-                # resolve_input used "wav_2" prefix -> map to wav_*_2 keys expected by worker
                 remapped = {}
                 for k, v in audio_2_result.items():
-                    suffix = k.split("wav_2", 1)[1]  # "_url" | "_path" | "_base64"
+                    suffix = k.split("wav_2", 1)[1]
                     remapped[f"wav{suffix}_2"] = v
                 input_data.update(remapped)
     except HTTPException:
+        jobs.pop(job_id, None)
+        _save_jobs()
         shutil.rmtree(tmpdir, ignore_errors=True)
         raise
     except Exception as e:
+        jobs.pop(job_id, None)
+        _save_jobs()
         shutil.rmtree(tmpdir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -270,7 +372,18 @@ async def submit(
 
 @router.get("/jobs")
 async def list_jobs():
-    return [{"job_id": jid, **job} for jid, job in jobs.items()]
+    items = [{"job_id": jid, **job} for jid, job in jobs.items()]
+    items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    return items
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_job(job_id: str):
+    job = jobs.pop(job_id, None)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    _save_jobs()
+    return {"deleted": job_id}
 
 
 @router.get("/status/{job_id}")
@@ -280,8 +393,8 @@ async def get_status(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
 
     return {
-        "status": job["status"],
-        "error": job.get("error")
+        "job_id": job_id,
+        **job
     }
 
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet } from 'react-router';
-import { Sidebar } from './Sidebar';
+import { Sidebar, MobileBottomNav } from './Sidebar';
 import { Header } from './Header';
 import { StatusBar } from './StatusBar';
 import { SettingsPanel } from './SettingsPanel';
@@ -11,15 +11,15 @@ export function Layout() {
 
   return (
     <div
-      className="flex flex-col w-full h-screen overflow-hidden"
+      className="flex flex-col w-full h-[100dvh] overflow-hidden"
       style={{ background: '#0F172A', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}
     >
       {/* Header */}
-      <Header onCreateClick={() => {}} />
+      <Header onSettingsOpen={() => setSettingsOpen(true)} />
 
       {/* Body */}
-      <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Desktop Sidebar */}
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(s => !s)}
@@ -38,8 +38,13 @@ export function Layout() {
         </main>
       </div>
 
-      {/* Status Bar */}
-      <StatusBar />
+      {/* Desktop Status Bar */}
+      <div className="hidden md:block">
+        <StatusBar />
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav onSettingsOpen={() => setSettingsOpen(true)} />
 
       {/* Settings Panel (global overlay) */}
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
