@@ -6,6 +6,8 @@ import os
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager, suppress
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlsplit
@@ -180,12 +182,60 @@ COMFY_OUTPUT_DIR = os.environ.get("COMFY_OUTPUT_DIR", "/ComfyUI/output")
 LOCAL_COMFY_NODE = os.environ.get("LOCAL_COMFY_NODE", "127.0.0.1:8188").strip()
 POD_SUBMIT_JOBS: dict[str, dict[str, Any]] = {}
 
-app = FastAPI(title="MiniMax H3 Studio & Pod Controller")
+# Idle safety watchdog: terminate the GPU Pod when no job arrives within this window.
+POD_IDLE_TIMEOUT_SECONDS = int(os.environ.get("POD_IDLE_TIMEOUT_SECONDS", "180"))
+POD_IDLE_CHECK_INTERVAL_SECONDS = max(
+    5, int(os.environ.get("POD_IDLE_CHECK_INTERVAL_SECONDS", "15"))
+)
+POD_ACTIVE_JOB_MAX_AGE_SECONDS = int(
+    os.environ.get("POD_ACTIVE_JOB_MAX_AGE_SECONDS", "1800")
+)
+POD_COMFY_PORT = int(os.environ.get("POD_COMFY_PORT", "8188"))
+POD_RUN_HISTORY_LIMIT = 10
+POD_ACTIVITY: dict[str, Any] = {
+    "last_activity_at": None,
+    "last_reason": "",
+    "auto_terminated_at": None,
+    "auto_terminated_pod_id": "",
+}
+POD_RUN_HISTORY: list[dict[str, Any]] = []
+_POD_WATCHDOG_TASK: asyncio.Task | None = None
+
+
+def ensure_pod_idle_watchdog_started() -> None:
+    """Start the idle watchdog once, even when hosted as a mounted sub-app."""
+    global _POD_WATCHDOG_TASK
+    if POD_IDLE_TIMEOUT_SECONDS <= 0:
+        return
+    if _POD_WATCHDOG_TASK is not None and not _POD_WATCHDOG_TASK.done():
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    _POD_WATCHDOG_TASK = loop.create_task(pod_idle_watchdog())
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    ensure_pod_idle_watchdog_started()
+    try:
+        yield
+    finally:
+        task = _POD_WATCHDOG_TASK
+        if task is not None:
+            task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await task
+
+
+app = FastAPI(title="MiniMax H3 Studio & Pod Controller", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
 
 @app.middleware("http")
 async def disable_frontend_caching(request: Request, call_next) -> Response:
+    ensure_pod_idle_watchdog_started()
     response = await call_next(request)
     if request.url.path.endswith("/") or "/static/" in request.url.path:
         response.headers["Cache-Control"] = "no-store, max-age=0"
@@ -314,6 +364,7 @@ def remember_pod_submit_job(prompt_id: str, pod_id: str = "") -> None:
         "pod_id": pod_id,
         "submitted_at": time.time(),
     }
+    mark_pod_activity("job-submitted")
 
 
 def get_pod_submit_render_time(prompt_id: str) -> float | None:
@@ -498,6 +549,236 @@ async def fetch_pod_boot_logs(
         return []
 
 
+def iso_utc(epoch_seconds: float | None) -> str | None:
+    if not isinstance(epoch_seconds, (int, float)):
+        return None
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch_seconds))
+
+
+def local_clock(epoch_seconds: float | None) -> str | None:
+    if not isinstance(epoch_seconds, (int, float)):
+        return None
+    return time.strftime("%H:%M:%S", time.localtime(epoch_seconds))
+
+
+def format_duration(seconds: float | None) -> str:
+    if not isinstance(seconds, (int, float)) or seconds < 0:
+        return ""
+    total = int(round(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
+def mark_pod_activity(reason: str) -> None:
+    POD_ACTIVITY["last_activity_at"] = time.time()
+    POD_ACTIVITY["last_reason"] = reason
+
+
+def parse_pod_started_at(pod: dict[str, Any] | None) -> float | None:
+    raw = (pod or {}).get("startedAt")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def pod_runtime_seconds(pod: dict[str, Any] | None) -> float | None:
+    started = parse_pod_started_at(pod)
+    if started is None:
+        return None
+    return max(0.0, time.time() - started)
+
+
+def record_pod_run(pod: dict[str, Any] | None, reason: str) -> dict[str, Any] | None:
+    started = parse_pod_started_at(pod)
+    if started is None or not (pod or {}).get("id"):
+        return None
+    terminated_at = time.time()
+    entry = {
+        "pod_id": pod.get("id", ""),
+        "started_at": iso_utc(started),
+        "terminated_at": iso_utc(terminated_at),
+        "terminated_clock": local_clock(terminated_at),
+        "duration_seconds": round(terminated_at - started, 1),
+        "duration_display": format_duration(terminated_at - started),
+        "reason": reason,
+    }
+    POD_RUN_HISTORY.insert(0, entry)
+    del POD_RUN_HISTORY[POD_RUN_HISTORY_LIMIT:]
+    return entry
+
+
+def active_pod_job_count() -> int:
+    now = time.time()
+    stale = [
+        prompt_id
+        for prompt_id, job in POD_SUBMIT_JOBS.items()
+        if now - float(job.get("submitted_at") or now) > POD_ACTIVE_JOB_MAX_AGE_SECONDS
+    ]
+    for prompt_id in stale:
+        POD_SUBMIT_JOBS.pop(prompt_id, None)
+    return len(POD_SUBMIT_JOBS)
+
+
+def evaluate_idle_termination(
+    *,
+    now: float,
+    last_activity: float | None,
+    pod_status: str,
+    pod_ready: bool,
+    active_jobs: int,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    decision: dict[str, Any] = {
+        "should_terminate": False,
+        "reset_activity": False,
+        "reason": "",
+        "idle_seconds": 0.0,
+        "remaining_seconds": None,
+    }
+    if timeout_seconds <= 0:
+        decision["reason"] = "disabled"
+        return decision
+    if pod_status != "RUNNING":
+        decision["reason"] = "pod-not-running"
+        return decision
+    if active_jobs > 0:
+        decision["reason"] = "job-active"
+        decision["reset_activity"] = True
+        return decision
+    if not pod_ready:
+        decision["reason"] = "booting"
+        decision["reset_activity"] = True
+        return decision
+    if last_activity is None:
+        decision["reason"] = "activity-unknown"
+        decision["reset_activity"] = True
+        return decision
+    idle_seconds = max(0.0, now - last_activity)
+    decision["idle_seconds"] = round(idle_seconds, 1)
+    decision["remaining_seconds"] = round(max(0.0, timeout_seconds - idle_seconds), 1)
+    if idle_seconds >= timeout_seconds:
+        decision["should_terminate"] = True
+        decision["reason"] = "idle-timeout"
+    else:
+        decision["reason"] = "active"
+    return decision
+
+
+def pod_idle_payload(ready: bool) -> dict[str, Any]:
+    active_jobs = active_pod_job_count()
+    decision = evaluate_idle_termination(
+        now=time.time(),
+        last_activity=POD_ACTIVITY["last_activity_at"],
+        pod_status="RUNNING" if ready else "UNKNOWN",
+        pod_ready=ready,
+        active_jobs=active_jobs,
+        timeout_seconds=POD_IDLE_TIMEOUT_SECONDS,
+    )
+    return {
+        "enabled": POD_IDLE_TIMEOUT_SECONDS > 0,
+        "timeout_seconds": POD_IDLE_TIMEOUT_SECONDS,
+        "timeout_display": format_duration(POD_IDLE_TIMEOUT_SECONDS),
+        "last_activity_at": iso_utc(POD_ACTIVITY["last_activity_at"]),
+        "last_activity_reason": POD_ACTIVITY["last_reason"],
+        "active_jobs": active_jobs,
+        "idle_seconds": decision["idle_seconds"],
+        "remaining_seconds": decision["remaining_seconds"],
+        "auto_terminated_at": POD_ACTIVITY["auto_terminated_at"],
+        "auto_terminated_pod_id": POD_ACTIVITY["auto_terminated_pod_id"],
+    }
+
+
+async def fetch_remote_comfy_queue(
+    session: aiohttp.ClientSession, pod_id: str
+) -> tuple[int, int] | None:
+    queue_url = f"https://{pod_id}-{POD_COMFY_PORT}.proxy.runpod.net/queue"
+    try:
+        async with session.get(
+            queue_url, timeout=aiohttp.ClientTimeout(total=6)
+        ) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return (
+        len(data.get("queue_running") or []),
+        len(data.get("queue_pending") or []),
+    )
+
+
+async def check_pod_idle_once() -> dict[str, Any] | None:
+    if POD_IDLE_TIMEOUT_SECONDS <= 0 or not DEFAULT_RUNPOD_API_KEY:
+        return None
+
+    timeout = aiohttp.ClientTimeout(total=25)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        pod = await find_minimax_pod(session)
+        if not pod or not pod.get("id"):
+            POD_ACTIVITY["last_activity_at"] = None
+            return None
+
+        pod_id = pod["id"]
+        status = pod.get("status", "")
+        ready = (
+            await check_remote_pod_ready(session, pod_id)
+            if status == "RUNNING"
+            else False
+        )
+        queue_state = (
+            await fetch_remote_comfy_queue(session, pod_id) if ready else None
+        )
+        queue_busy = bool(queue_state and (queue_state[0] or queue_state[1]))
+
+        decision = evaluate_idle_termination(
+            now=time.time(),
+            last_activity=POD_ACTIVITY["last_activity_at"],
+            pod_status=status,
+            pod_ready=ready,
+            active_jobs=active_pod_job_count() + (1 if queue_busy else 0),
+            timeout_seconds=POD_IDLE_TIMEOUT_SECONDS,
+        )
+
+        if queue_busy:
+            mark_pod_activity("comfyui-queue-busy")
+            return decision
+        if decision["reset_activity"]:
+            mark_pod_activity("pod-booting" if not ready else "job-active")
+            return decision
+        if decision["should_terminate"]:
+            await call_runpod_mcp(session, "delete-pod", {"id": pod_id})
+            record_pod_run(pod, reason="idle-timeout")
+            POD_ACTIVITY["last_activity_at"] = None
+            POD_ACTIVITY["last_reason"] = "auto-terminated-idle"
+            POD_ACTIVITY["auto_terminated_at"] = iso_utc(time.time())
+            POD_ACTIVITY["auto_terminated_pod_id"] = pod_id
+        return decision
+
+
+async def pod_idle_watchdog() -> None:
+    while True:
+        await asyncio.sleep(POD_IDLE_CHECK_INTERVAL_SECONDS)
+        try:
+            await check_pod_idle_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            continue
+
+
 def format_pod_status_payload(
     pod: dict[str, Any] | None,
     ready: bool,
@@ -518,6 +799,9 @@ def format_pod_status_payload(
             "default_volume": default_vol,
             "gpu_options": MINIMAX_GPU_OPTIONS,
             "quant_profiles": QUANT_PROFILES,
+            "idle": pod_idle_payload(False),
+            "last_run": POD_RUN_HISTORY[0] if POD_RUN_HISTORY else None,
+            "run_history": POD_RUN_HISTORY[:5],
         }
 
     pod_id = pod.get("id", "")
@@ -537,6 +821,7 @@ def format_pod_status_payload(
     gpu_info = pod.get("gpu") or {}
     pod_env = pod.get("env") or {}
     quant_profile = pod_env.get("minimax_quant", MINIMAX_DEFAULT_QUANT)
+    runtime = pod_runtime_seconds(pod)
 
     return {
         "exists": True,
@@ -558,11 +843,16 @@ def format_pod_status_payload(
             "comfy_url": f"https://{pod_id}-8188.proxy.runpod.net",
             "jupyter_url": f"https://{pod_id}-8888.proxy.runpod.net",
             "started_at": pod.get("startedAt"),
+            "runtime_seconds": None if runtime is None else round(runtime, 1),
+            "runtime_display": format_duration(runtime),
         },
         "logs": logs,
         "default_volume": default_vol,
         "gpu_options": MINIMAX_GPU_OPTIONS,
         "quant_profiles": QUANT_PROFILES,
+        "idle": pod_idle_payload(status == "RUNNING" and ready),
+        "last_run": POD_RUN_HISTORY[0] if POD_RUN_HISTORY else None,
+        "run_history": POD_RUN_HISTORY[:5],
     }
 
 
@@ -648,6 +938,7 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
                     "pod-action",
                     {"id": pod_id, "body": {"action": "start"}},
                 )
+                mark_pod_activity("pod-start")
                 return format_pod_status_payload(updated or existing, False, [])
             ready = (
                 await check_remote_pod_ready(session, pod_id)
@@ -717,6 +1008,7 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
                     verified = await call_runpod_mcp(
                         session, "get-pod", {"id": created["id"]}
                     )
+                    mark_pod_activity("pod-deploy")
                     return format_pod_status_payload(verified or created, False, [])
             except HTTPException as exc:
                 last_error = exc.detail
@@ -741,7 +1033,14 @@ async def pod_action_endpoint(request: PodLifecycleActionRequest) -> dict[str, A
             pod_id = existing["id"]
 
         if request.action == "terminate":
+            pod_obj = await find_minimax_pod(session)
             await call_runpod_mcp(session, "delete-pod", {"id": pod_id})
+            record_pod_run(
+                pod_obj if (pod_obj or {}).get("id") == pod_id else None,
+                reason="terminated",
+            )
+            POD_ACTIVITY["last_activity_at"] = None
+            POD_ACTIVITY["last_reason"] = "terminated"
             return format_pod_status_payload(None, False, [])
 
         updated = await call_runpod_mcp(
@@ -749,6 +1048,7 @@ async def pod_action_endpoint(request: PodLifecycleActionRequest) -> dict[str, A
             "pod-action",
             {"id": pod_id, "body": {"action": request.action}},
         )
+        mark_pod_activity(f"pod-{request.action}")
         refreshed = await call_runpod_mcp(session, "get-pod", {"id": pod_id})
         pod_obj = refreshed or updated
         ready = False
@@ -961,6 +1261,7 @@ async def get_pod_submit_status(
 
         history_entry = history_data.get(prompt_id)
         if history_entry is None:
+            mark_pod_activity("job-poll")
             return {
                 "ok": True,
                 "status_code": 202,
@@ -976,10 +1277,13 @@ async def get_pod_submit_status(
         exec_error = extract_history_error(history_entry)
         if exec_error:
             POD_SUBMIT_JOBS.pop(prompt_id, None)
+            mark_pod_activity("job-failed")
             raise HTTPException(status_code=502, detail=exec_error)
 
         render_time_sec = get_pod_submit_render_time(prompt_id)
         POD_SUBMIT_JOBS.pop(prompt_id, None)
+        completed_at = time.time()
+        mark_pod_activity("job-completed")
         output_payload = build_pod_output_payload(history_entry, pod_id=target_pod_id)
 
         # Eagerly cache media files locally from remote ComfyUI /view endpoint
@@ -1018,6 +1322,9 @@ async def get_pod_submit_status(
                 "status": "completed",
                 "metadata": {
                     "render_time_sec": render_time_sec,
+                    "duration_seconds": render_time_sec,
+                    "completed_at": iso_utc(completed_at),
+                    "completed_clock": local_clock(completed_at),
                 },
                 "output": output_payload,
             },
