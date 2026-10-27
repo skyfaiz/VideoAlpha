@@ -302,7 +302,8 @@ class InfinitetalkS3Client:
         max_frame: Optional[int] = None,
         person_count: str = "single",
         input_type: str = "image",
-        use_network_volume: bool = False
+        use_network_volume: bool = False,
+        force_offload: bool = True
     ) -> Dict[str, Any]:
         """
         Create video from local files (including S3 upload)
@@ -318,6 +319,7 @@ class InfinitetalkS3Client:
             person_count: Number of people ("single" or "multi")
             input_type: Input type ("image" or "video")
             use_network_volume: Whether to use network volume (if True, saves result to S3)
+            force_offload: Whether to offload model components to CPU during inference
         
         Returns:
             Job result dictionary
@@ -361,7 +363,8 @@ class InfinitetalkS3Client:
             "person_count": person_count,
             "prompt": prompt,
             "width": width,
-            "height": height
+            "height": height,
+            "force_offload": force_offload
         }
         
         # Set media input

@@ -37,3 +37,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Secrets & IDE internals
+*.pem
+.claude/
