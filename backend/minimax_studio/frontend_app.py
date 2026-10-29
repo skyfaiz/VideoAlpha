@@ -177,6 +177,13 @@ MINIMAX_GPU_OPTIONS = [
     },
 ]
 
+# Live GPU availability is cached briefly so frequent UI refreshes do not hit
+# the RunPod catalog on every poll.
+GPU_OPTIONS_CACHE_TTL_SECONDS = max(
+    5, int(os.environ.get("GPU_OPTIONS_CACHE_TTL_SECONDS", "30"))
+)
+GPU_OPTIONS_CACHE: dict[str, Any] = {"fetched_at": 0.0, "options": []}
+
 COMFY_INPUT_DIR = os.environ.get("COMFY_INPUT_DIR", "/ComfyUI/input")
 COMFY_OUTPUT_DIR = os.environ.get("COMFY_OUTPUT_DIR", "/ComfyUI/output")
 LOCAL_COMFY_NODE = os.environ.get("LOCAL_COMFY_NODE", "127.0.0.1:8188").strip()
@@ -532,6 +539,75 @@ async def find_minimax_pod(session: aiohttp.ClientSession) -> dict[str, Any] | N
     return None
 
 
+async def fetch_available_gpu_options() -> list[dict[str, Any]]:
+    """GPU types with deployable stock in the configured data center.
+
+    Queries the RunPod catalog (secure cloud, 1 GPU, CUDA >= 13.0) and keeps
+    only entries reporting availability in MINIMAX_DATA_CENTER_ID — the
+    persistent volume is pinned there, so other regions cannot deploy anyway.
+    """
+    now = time.monotonic()
+    if (
+        GPU_OPTIONS_CACHE["options"]
+        and now - GPU_OPTIONS_CACHE["fetched_at"] < GPU_OPTIONS_CACHE_TTL_SECONDS
+    ):
+        return GPU_OPTIONS_CACHE["options"]
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        data = await call_runpod_mcp(
+            session,
+            "list-gpu-types",
+            {
+                "include": ["AVAILABILITY"],
+                "product": ["POD"],
+                "cloud": "SECURE",
+                "count": 1,
+                "minCudaVersion": "13.0",
+            },
+        )
+    options: list[dict[str, Any]] = []
+    for gpu in (data or {}).get("gpus") or []:
+        gpu_id = gpu.get("id")
+        if not gpu.get("secure") or not gpu_id:
+            continue
+        dc = next(
+            (
+                d
+                for d in gpu.get("dataCenters") or []
+                if d.get("id") == MINIMAX_DATA_CENTER_ID
+            ),
+            None,
+        )
+        if dc is None:
+            continue
+        availability = (
+            dc.get("availability") or gpu.get("availability") or ""
+        ).upper()
+        if availability in ("", "NONE", "OUT"):
+            continue
+        price = (gpu.get("price") or {}).get("secure")
+        vram = gpu.get("memory")
+        price_str = (
+            f"${price:.2f}/hr" if isinstance(price, (int, float)) else "price N/A"
+        )
+        options.append(
+            {
+                "id": gpu_id,
+                "label": (
+                    f"{gpu_id} · {vram} GB VRAM "
+                    f"({price_str} · {availability.title()} availability)"
+                ),
+                "vram_gb": vram,
+                "price_hr": price if isinstance(price, (int, float)) else None,
+                "availability": availability,
+            }
+        )
+    options.sort(key=lambda g: (-(g.get("vram_gb") or 0), g["id"]))
+    GPU_OPTIONS_CACHE["fetched_at"] = now
+    GPU_OPTIONS_CACHE["options"] = options
+    return options
+
+
 async def check_remote_pod_ready(
     session: aiohttp.ClientSession, pod_id: str
 ) -> bool:
@@ -839,7 +915,7 @@ def format_pod_status_payload(
             "pod": None,
             "logs": [],
             "default_volume": default_vol,
-            "gpu_options": MINIMAX_GPU_OPTIONS,
+            "gpu_options": GPU_OPTIONS_CACHE["options"] or MINIMAX_GPU_OPTIONS,
             "quant_profiles": QUANT_PROFILES,
             "idle": pod_idle_payload(False),
             "last_run": POD_RUN_HISTORY[0] if POD_RUN_HISTORY else None,
@@ -896,7 +972,7 @@ def format_pod_status_payload(
         },
         "logs": logs,
         "default_volume": default_vol,
-        "gpu_options": MINIMAX_GPU_OPTIONS,
+        "gpu_options": GPU_OPTIONS_CACHE["options"] or MINIMAX_GPU_OPTIONS,
         "quant_profiles": QUANT_PROFILES,
         "idle": pod_idle_payload(status == "RUNNING" and ready),
         "last_run": POD_RUN_HISTORY[0] if POD_RUN_HISTORY else None,
@@ -924,6 +1000,28 @@ async def get_pod_status_endpoint() -> dict[str, Any]:
                 fetch_pod_boot_logs(session, pod_id),
             )
         return format_pod_status_payload(pod, ready, logs)
+
+
+@app.get("/api/pod/gpus")
+async def get_gpu_options_endpoint() -> dict[str, Any]:
+    """Live GPU availability for pod deploys in the configured data center."""
+    live = False
+    options: list[dict[str, Any]] = []
+    if DEFAULT_RUNPOD_API_KEY:
+        try:
+            options = await fetch_available_gpu_options()
+            live = True
+        except Exception:
+            options = []
+    if not live:
+        options = MINIMAX_GPU_OPTIONS
+    return {
+        "gpus": options,
+        "live": live,
+        "data_center_id": MINIMAX_DATA_CENTER_ID,
+        "cloud": "SECURE",
+        "refresh_seconds": GPU_OPTIONS_CACHE_TTL_SECONDS,
+    }
 
 
 @app.get("/api/pod/live-options")
@@ -1009,11 +1107,18 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
             else MINIMAX_DEFAULT_QUANT
         )
         gpu_id = request.gpu_id.strip() or MINIMAX_GPU_OPTIONS[0]["id"]
-        known_gpu_ids = {g["id"] for g in MINIMAX_GPU_OPTIONS}
+        try:
+            live_options = await fetch_available_gpu_options()
+        except Exception:
+            live_options = []
+        known_gpu_ids = {g["id"] for g in live_options} or {
+            g["id"] for g in MINIMAX_GPU_OPTIONS
+        }
         if gpu_id not in known_gpu_ids:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown GPU type '{gpu_id}'. Choose one of: "
+                detail=f"GPU '{gpu_id}' is not available in data center "
+                f"{dc_id} right now. Choose one of: "
                 + ", ".join(sorted(known_gpu_ids)),
             )
 

@@ -20,6 +20,7 @@ const state = {
   payloadJson: "",
   pod: null,
   podActionBusy: false,
+  gpuOptionsEmpty: false,
 };
 
 const ratioDimensions = {
@@ -132,6 +133,7 @@ const podCostHistoryOutput = document.querySelector("#pod-cost-history-output");
 const POD_STATUS_POLL_INTERVAL_MS = 2500;
 const POD_STATUS_POLL_TIMEOUT_MS = 25 * 60 * 1000;
 let podLifecyclePollTimer = null;
+let gpuOptionsPollTimer = null;
 
 function secondsToFrames(seconds) {
   const raw = Math.max(5, Math.round(seconds * state.fps));
@@ -1045,7 +1047,7 @@ function renderPodControlState(data) {
     podGpuSelect.hidden = false;
     podQuantSelect.hidden = false;
     podDeployBtn.hidden = false;
-    podDeployBtn.disabled = state.podActionBusy;
+    podDeployBtn.disabled = state.podActionBusy || state.gpuOptionsEmpty;
     podStartBtn.hidden = true;
     podStopBtn.hidden = true;
     podTerminateBtn.hidden = true;
@@ -1106,6 +1108,42 @@ function renderPodControlState(data) {
   } else {
     podLogsDetails.hidden = pod.phase !== "BOOTSTRAPPING";
   }
+}
+
+function renderGpuOptions(gpus) {
+  const previous = podGpuSelect.value;
+  podGpuSelect.innerHTML = "";
+  state.gpuOptionsEmpty = !gpus.length;
+  if (!gpus.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "No GPUs currently available — retrying…";
+    podGpuSelect.appendChild(opt);
+  } else {
+    for (const gpu of gpus) {
+      const opt = document.createElement("option");
+      opt.value = gpu.id;
+      opt.textContent = gpu.label || gpu.id;
+      podGpuSelect.appendChild(opt);
+    }
+    if (previous && gpus.some((gpu) => gpu.id === previous)) {
+      podGpuSelect.value = previous;
+    }
+  }
+  if (!podGpuSelect.hidden) {
+    podDeployBtn.disabled = state.podActionBusy || state.gpuOptionsEmpty;
+  }
+}
+
+async function refreshGpuOptions() {
+  try {
+    const resp = await fetch("api/pod/gpus");
+    if (resp.ok) {
+      const data = await resp.json();
+      renderGpuOptions(data?.gpus || []);
+    }
+  } catch (_err) {}
+  gpuOptionsPollTimer = window.setTimeout(refreshGpuOptions, 30000);
 }
 
 async function refreshPodStatus() {
@@ -1435,6 +1473,7 @@ submitButton.addEventListener("click", async () => {
 initializeConfig()
   .then(() => {
     refreshPodStatus();
+    refreshGpuOptions();
   })
   .catch((err) => {
     setFeedback(err.message, "error");
