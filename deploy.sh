@@ -7,7 +7,14 @@ cd "$(dirname "$0")"
 APP_DIR="$(pwd)"
 
 echo "== Pulling latest code =="
+DEPLOY_SH_BEFORE="$(md5sum deploy.sh | cut -d' ' -f1)"
 git pull --ff-only
+# `git pull` can rewrite this script while bash is still reading it, which makes
+# bash run the buffered (old) copy and silently skip newly added steps.
+if [ "$(md5sum deploy.sh | cut -d' ' -f1)" != "$DEPLOY_SH_BEFORE" ] && [ -z "${VIDEOALPHA_DEPLOY_REEXEC:-}" ]; then
+  echo "== deploy.sh changed in this pull, re-executing =="
+  VIDEOALPHA_DEPLOY_REEXEC=1 exec bash "$0" "$@"
+fi
 
 echo "== Backend =="
 cd "$APP_DIR/backend"
