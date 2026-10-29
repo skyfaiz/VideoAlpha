@@ -3,17 +3,18 @@
 # Pulls latest code, reinstalls deps if needed, rebuilds frontend, restarts backend.
 set -e
 
-cd "$(dirname "$0")"
+cd "${VIDEOALPHA_DEPLOY_DIR:-$(dirname "$0")}"
 APP_DIR="$(pwd)"
 
-echo "== Pulling latest code =="
-DEPLOY_SH_BEFORE="$(md5sum deploy.sh | cut -d' ' -f1)"
-git pull --ff-only
-# `git pull` can rewrite this script while bash is still reading it, which makes
-# bash run the buffered (old) copy and silently skip newly added steps.
-if [ "$(md5sum deploy.sh | cut -d' ' -f1)" != "$DEPLOY_SH_BEFORE" ] && [ -z "${VIDEOALPHA_DEPLOY_REEXEC:-}" ]; then
-  echo "== deploy.sh changed in this pull, re-executing =="
-  VIDEOALPHA_DEPLOY_REEXEC=1 exec bash "$0" "$@"
+# `git pull` rewrites this file while bash is still reading it, so the run keeps
+# executing the old copy and silently skips newly added steps (this is how the
+# /polly-app nginx block was missed on the first deploy). Pull once, then re-run
+# the freshly pulled script from a string so bash never re-reads a changed file.
+# The pull and the exec sit in one parsed block on purpose: the block is parsed
+# before the pull happens, and exec replaces the process before bash reads on.
+if [ -z "${VIDEOALPHA_DEPLOY_SYNCED:-}" ]; then
+  echo "== Pulling latest code =="
+  git pull --ff-only && VIDEOALPHA_DEPLOY_DIR="$APP_DIR" VIDEOALPHA_DEPLOY_SYNCED=1 exec bash -c "$(cat deploy.sh)"
 fi
 
 echo "== Backend =="
