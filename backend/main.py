@@ -4,11 +4,12 @@ from fastapi.responses import RedirectResponse
 
 from routes import infinitetalk, wananimate
 from minimax_studio.frontend_app import app as minimax_app
+from polly_studio.frontend_app import app as polly_app
 
 app = FastAPI(
     title="RunPod Video GUI",
-    description="GUI for Infinitetalk, WanAnimate, LTX 2.5, and MiniMax H3 video generation services",
-    version="1.1.0"
+    description="GUI for Infinitetalk, WanAnimate, LTX 2.5, MiniMax H3, and Amazon Polly voice generation services",
+    version="1.2.0"
 )
 
 app.add_middleware(
@@ -32,6 +33,15 @@ app.mount("/minimax-app", minimax_app)
 app.mount("/api/minimax", minimax_app)
 
 
+@app.get("/polly-app")
+async def redirect_polly_app():
+    return RedirectResponse(url="/polly-app/")
+
+
+app.mount("/polly-app", polly_app)
+app.mount("/api/polly", polly_app)
+
+
 @app.get("/")
 async def root():
     return {
@@ -41,6 +51,7 @@ async def root():
             "infinitetalk": "/api/infinitetalk",
             "wananimate": "/api/wananimate",
             "minimax": "/minimax-app/",
+            "polly": "/polly-app/",
         }
     }
 

@@ -33,6 +33,10 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/polly-app': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.

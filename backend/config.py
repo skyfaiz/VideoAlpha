@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str
     S3_REGION: str = "eu-ro-1"
 
+    # Amazon Polly (AWS)
+    AWS_DEFAULT_REGION: str = "us-east-1"
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_SESSION_TOKEN: str = ""
+    POLLY_S3_BUCKET_NAME: str = ""
+    POLLY_S3_KEY_PREFIX: str = "polly-outputs/"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import {
-  Video, ArrowRight, Sparkles, Film, Clapperboard, Users, Layers, Plus, CheckCircle, Clock, XCircle, Loader
+  Video, ArrowRight, Sparkles, Film, Clapperboard, Volume2, Users, Layers, Plus, CheckCircle, Clock, XCircle, Loader
 } from 'lucide-react';
 import {
   getStoredJobs,
@@ -222,6 +222,21 @@ export function DashboardPage() {
                 <Clapperboard size={15} style={{ color: '#F472B6' }} />
                 <span style={{ fontSize: '13px', fontWeight: 700, color: '#E2E8F0' }}>MiniMax H3</span>
                 <ArrowRight size={14} style={{ color: '#F472B6' }} />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.03, boxShadow: '0 0 24px rgba(16,185,129,0.4)' }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('/voices')}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl w-full sm:w-auto"
+                style={{
+                  background: 'rgba(16,185,129,0.16)',
+                  border: '1px solid rgba(16,185,129,0.4)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Volume2 size={15} style={{ color: '#34D399' }} />
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#E2E8F0' }}>Generate Voices</span>
+                <ArrowRight size={14} style={{ color: '#34D399' }} />
               </motion.button>
             </div>
           </div>

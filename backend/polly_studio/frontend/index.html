@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Amazon Polly Voice Studio · VideoAlpha</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <main class="app-shell">
+        <!-- Hero -->
+        <section class="hero">
+          <p class="eyebrow">Amazon Polly Studio · Generative, Neural, Long-Form &amp; Standard TTS</p>
+          <h1>Generate voices &amp; lip-sync audio.</h1>
+          <p class="hero-copy">
+            Synthesize lifelike speech across 40+ languages and 4 Amazon Polly engines with full SSML prosody, custom pronunciation lexicons, synchronized viseme speech marks, and direct WAV/MP3 export for InfiniteTalk &amp; MiniMax workflows.
+          </p>
+        </section>
+
+        <!-- AWS Connection & Region Control Bar -->
+        <section class="panel aws-control-panel" aria-label="AWS Polly Connection & Region">
+          <div class="aws-control-header">
+            <div class="aws-title-wrap">
+              <div class="badge-row">
+                <span class="payload-label">AWS Polly Control Plane</span>
+                <span id="aws-status-badge" class="status-badge status-idle">Checking AWS credentials...</span>
+                <span id="voice-source-badge" class="status-badge status-info" hidden>Live Catalog</span>
+              </div>
+              <h2 id="aws-panel-title">Amazon Polly Speech Synthesis Service</h2>
+              <p id="aws-panel-subtitle" class="panel-subtitle">
+                Credentials resolved server-side via <code>backend/.env</code> or EC2 IAM Role · Explicit region passed to <code>boto3.client("polly", region_name=...)</code>
+              </p>
+            </div>
+
+            <div class="aws-actions-wrap">
+              <div class="control-inline-group">
+                <label for="region-select" class="inline-label">AWS Region</label>
+                <select id="region-select" class="studio-select" aria-label="Select AWS Region"></select>
+              </div>
+              <button id="refresh-voices-btn" class="studio-btn studio-btn-secondary" type="button" title="Refresh voices from AWS Polly">
+                ↻ Refresh Catalog
+              </button>
+            </div>
+          </div>
+
+          <div id="aws-warning-banner" class="warning-banner" hidden></div>
+        </section>
+
+        <!-- Engine Selection Bar -->
+        <section class="panel engine-selector-panel" aria-label="Polly Engine Selection">
+          <div class="section-header-row">
+            <div>
+              <span class="payload-label">Step 1 · Select Synthesis Engine</span>
+              <h3 class="section-title">Amazon Polly Voice Engine</h3>
+            </div>
+            <span id="engine-price-badge" class="status-badge status-accent">$30.00 / 1M chars</span>
+          </div>
+
+          <div id="engine-pills-bar" class="engine-pills-grid" role="radiogroup" aria-label="Voice Engine"></div>
+
+          <div id="engine-meta-banner" class="engine-meta-banner">
+            <div class="engine-meta-text">
+              <div class="badge-row">
+                <span id="engine-badge-name" class="status-badge status-ready">Generative Engine</span>
+                <span id="engine-badge-rates" class="status-badge status-idle">Default 24,000 Hz</span>
+                <span id="engine-badge-marks" class="status-badge status-idle">Speech Marks: Word, Sentence</span>
+              </div>
+              <p id="engine-description" class="engine-description">
+                Next-generation LLM-powered voice engine producing emotionally adaptive, human-like conversational speech.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Voice Browser & Filter Dashboard -->
+        <section class="panel voice-browser-panel" aria-label="Voice Catalog Browser">
+          <div class="section-header-row">
+            <div>
+              <span class="payload-label">Step 2 · Choose Voice &amp; Locale</span>
+              <h3 class="section-title">
+                Voice Catalog
+                <span id="voices-count-chip" class="count-chip">0 voices</span>
+              </h3>
+            </div>
+
+            <div class="selected-voice-pill" id="selected-voice-summary">
+              <span class="selected-voice-dot"></span>
+              <span>Selected: <strong id="selected-voice-label">Ruth (en-US · Female)</strong></span>
+            </div>
+          </div>
+
+          <!-- Filters Bar -->
+          <div class="voice-filters-grid">
+            <div class="field-group">
+              <label for="voice-search-input" class="field-label">Search Voice / Locale</label>
+              <input
+                id="voice-search-input"
+                type="search"
+                class="studio-input"
+                placeholder="Search by name (Ruth, Matthew, Joanna, Kajal...) or language"
+              />
+            </div>
+
+            <div class="field-group">
+              <label for="language-filter-select" class="field-label">Language / Locale (LanguageCode)</label>
+              <select id="language-filter-select" class="studio-select">
+                <option value="">All Languages &amp; Locales</option>
+              </select>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label">Gender Filter</label>
+              <div class="segmented-group" id="gender-filter-group">
+                <button type="button" class="seg-btn seg-btn-active" data-gender="">All</button>
+                <button type="button" class="seg-btn" data-gender="Female">Female</button>
+                <button type="button" class="seg-btn" data-gender="Male">Male</button>
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label for="bilingual-override-select" class="field-label">Bilingual Override (Optional)</label>
+              <select id="bilingual-override-select" class="studio-select">
+                <option value="">Default Voice Locale</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="voice-toggle-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="include-additional-langs-checkbox" checked />
+              <span>Include Additional Language Codes (<code>IncludeAdditionalLanguageCodes=true</code> for bilingual voices)</span>
+            </label>
+          </div>
+
+          <!-- Voice Cards Grid -->
+          <div id="voices-grid" class="voices-grid" role="listbox" aria-label="Available Amazon Polly Voices"></div>
+        </section>
+
+        <!-- Mode Navigation Tabs (Real-time Synthesis vs Async S3 Task vs Lexicon Manager) -->
+        <div class="workspace-tabs-bar" role="tablist">
+          <button type="button" class="workspace-tab workspace-tab-active" data-tab="realtime">
+            ⚡ Real-Time Synthesis (SynthesizeSpeech)
+          </button>
+          <button type="button" class="workspace-tab" data-tab="async">
+            ☁️ Long-Form S3 Async Task (Up to 100k chars)
+          </button>
+          <button type="button" class="workspace-tab" data-tab="lexicons">
+            📖 Pronunciation Lexicons (PLS CRUD)
+          </button>
+        </div>
+
+        <!-- TAB 1: Real-Time Synthesis Workspace -->
+        <section id="tab-panel-realtime" class="workspace-grid">
+          <!-- Left Column: Script, SSML Toolbar & Prosody Controls -->
+          <div class="workspace-col">
+            <div class="panel editor-panel">
+              <div class="section-header-row">
+                <div>
+                  <span class="payload-label">Step 3 · Script &amp; SSML Editor</span>
+                  <h3 class="section-title">Speech Input &amp; Markup</h3>
+                </div>
+
+                <div class="segmented-group" id="text-type-group">
+                  <button type="button" class="seg-btn seg-btn-active" data-text-type="text">Plain Text</button>
+                  <button type="button" class="seg-btn" data-text-type="ssml">SSML (&lt;speak&gt;)</button>
+                </div>
+              </div>
+
+              <!-- Title + Quick Script Presets -->
+              <div class="editor-top-row">
+                <div class="field-group">
+                  <label for="synthesis-title-input" class="field-label">Clip Title / Filename Label</label>
+                  <input
+                    id="synthesis-title-input"
+                    type="text"
+                    class="studio-input"
+                    placeholder="e.g., Hero Intro Voiceover · Scene 1"
+                  />
+                </div>
+                <div class="field-group">
+                  <label for="sample-preset-select" class="field-label">Load Sample Script</label>
+                  <select id="sample-preset-select" class="studio-select">
+                    <option value="">Choose a starter script...</option>
+                    <option value="video_intro">AI Video Narration (Conversational)</option>
+                    <option value="newscaster">Breaking Tech News Bulletin</option>
+                    <option value="storytelling">Cinematic Storytelling &amp; Pauses</option>
+                    <option value="ssml_showcase">SSML Prosody &amp; Bookmarks Showcase</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Engine-aware SSML Tag Builder Toolbar -->
+              <div class="ssml-toolbar-wrap">
+                <div class="ssml-toolbar-header">
+                  <span class="field-label">SSML Tag Helper Toolbar (Click to insert or wrap selected text)</span>
+                  <span class="ssml-hint">Dimmed tags require Neural or Standard engine</span>
+                </div>
+                <div id="ssml-toolbar" class="ssml-toolbar"></div>
+              </div>
+
+              <!-- Textarea -->
+              <div class="field-group">
+                <textarea
+                  id="synthesis-textarea"
+                  class="studio-textarea"
+                  rows="7"
+                  placeholder="Enter the text or <speak>SSML</speak> you want Amazon Polly to synthesize..."
+                >Welcome to VideoAlpha Studio. With Amazon Polly, you can generate natural voiceovers and synchronized lip-sync audio for any video workflow in seconds.</textarea>
+              </div>
+
+              <!-- Character & Cost Meter -->
+              <div class="char-meter-bar">
+                <div class="char-stats">
+                  <span>Billed Chars: <strong id="billed-chars-count">0</strong> / 3,000</span>
+                  <span>Total Chars: <strong id="total-chars-count">0</strong> / 6,000</span>
+                  <span>Est. Duration: <strong id="est-duration-label">~0.0s</strong></span>
+                  <span>Est. Cost: <strong id="est-cost-label">$0.0000</strong></span>
+                </div>
+                <div class="char-progress-track">
+                  <div id="char-progress-fill" class="char-progress-fill" style="width: 5%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Prosody, Speaking Style & Acoustic Controls -->
+            <div class="panel prosody-panel">
+              <div class="section-header-row">
+                <div>
+                  <span class="payload-label">Step 4 · Prosody, Style &amp; Acoustic Shaping</span>
+                  <h3 class="section-title">Voice Tuning &amp; Amazon Polly Effects</h3>
+                </div>
+                <button id="reset-prosody-btn" type="button" class="studio-btn studio-btn-ghost">
+                  Reset Defaults
+                </button>
+              </div>
+
+              <div class="prosody-grid">
+                <div class="field-group">
+                  <label for="prosody-rate-select" class="field-label">
+                    Speaking Rate (<code>prosody rate</code>)
+                  </label>
+                  <select id="prosody-rate-select" class="studio-select">
+                    <option value="100%">Default (100%)</option>
+                    <option value="x-slow">x-slow</option>
+                    <option value="slow">slow</option>
+                    <option value="medium">medium</option>
+                    <option value="fast">fast</option>
+                    <option value="x-fast">x-fast</option>
+                    <option value="75%">75% (Slower)</option>
+                    <option value="85%">85%</option>
+                    <option value="90%">90%</option>
+                    <option value="95%">95%</option>
+                    <option value="105%">105%</option>
+                    <option value="110%">110%</option>
+                    <option value="115%">115%</option>
+                    <option value="125%">125% (Faster)</option>
+                    <option value="150%">150%</option>
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label for="prosody-pitch-select" class="field-label">
+                    Pitch (<code>prosody pitch</code> · Neural/Std)
+                  </label>
+                  <select id="prosody-pitch-select" class="studio-select">
+                    <option value="0%">Default (0%)</option>
+                    <option value="x-low">x-low</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                    <option value="x-high">x-high</option>
+                    <option value="-15%">-15% (Lower)</option>
+                    <option value="-10%">-10%</option>
+                    <option value="-5%">-5%</option>
+                    <option value="+5%">+5%</option>
+                    <option value="+10%">+10%</option>
+                    <option value="+15%">+15% (Higher)</option>
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label for="prosody-volume-select" class="field-label">
+                    Volume (<code>prosody volume</code>)
+                  </label>
+                  <select id="prosody-volume-select" class="studio-select">
+                    <option value="default">Default</option>
+                    <option value="silent">silent</option>
+                    <option value="x-soft">x-soft</option>
+                    <option value="soft">soft</option>
+                    <option value="medium">medium</option>
+                    <option value="loud">loud</option>
+                    <option value="x-loud">x-loud</option>
+                    <option value="-6dB">-6 dB</option>
+                    <option value="-3dB">-3 dB</option>
+                    <option value="+3dB">+3 dB</option>
+                    <option value="+6dB">+6 dB</option>
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label for="prosody-domain-select" class="field-label">
+                    Speaking Domain (<code>amazon:domain</code> · Neural)
+                  </label>
+                  <select id="prosody-domain-select" class="studio-select">
+                    <option value="none">Standard Voice Persona</option>
+                    <option value="conversational">Conversational Style</option>
+                    <option value="news">Newscaster Style</option>
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label for="prosody-timbre-select" class="field-label">
+                    Vocal Tract Length (<code>timbre</code> · Standard)
+                  </label>
+                  <select id="prosody-timbre-select" class="studio-select">
+                    <option value="default">Default Timbre (100%)</option>
+                    <option value="-15%">-15% (Higher / Smaller Tract)</option>
+                    <option value="-10%">-10%</option>
+                    <option value="-5%">-5%</option>
+                    <option value="+5%">+5%</option>
+                    <option value="+10%">+10%</option>
+                    <option value="+15%">+15% (Deeper / Longer Tract)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="effects-toggles-grid">
+                <label class="effect-chip-toggle">
+                  <input type="checkbox" id="effect-drc-checkbox" />
+                  <span>Dynamic Range Compression (<code>drc</code> · Neural/Std)</span>
+                </label>
+                <label class="effect-chip-toggle">
+                  <input type="checkbox" id="effect-whispered-checkbox" />
+                  <span>Whispered Voice (<code>whispered</code> · Std)</span>
+                </label>
+                <label class="effect-chip-toggle">
+                  <input type="checkbox" id="effect-soft-checkbox" />
+                  <span>Soft Phonation (<code>phonation="soft"</code> · Std)</span>
+                </label>
+                <label class="effect-chip-toggle">
+                  <input type="checkbox" id="effect-breaths-checkbox" />
+                  <span>Auto-Breaths (<code>amazon:auto-breaths</code> · Std)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Audio Format, Speech Marks, Active Output Player & Viseme Timeline -->
+          <div class="workspace-col">
+            <div class="panel output-config-panel">
+              <div class="section-header-row">
+                <div>
+                  <span class="payload-label">Step 5 · Format, Sample Rate &amp; Speech Marks</span>
+                  <h3 class="section-title">Output &amp; Lip-Sync Configuration</h3>
+                </div>
+              </div>
+
+              <div class="config-form-grid">
+                <div class="field-group">
+                  <label for="output-format-select" class="field-label">Output Format (<code>OutputFormat</code>)</label>
+                  <select id="output-format-select" class="studio-select"></select>
+                </div>
+
+                <div class="field-group">
+                  <label for="sample-rate-select" class="field-label">Sample Rate (<code>SampleRate</code> Hz)</label>
+                  <select id="sample-rate-select" class="studio-select"></select>
+                </div>
+              </div>
+
+              <!-- Speech Marks Options -->
+              <div class="speech-marks-box">
+                <div class="speech-marks-box-header">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="include-speech-marks-checkbox" checked />
+                    <span><strong>Generate Synchronized Speech Marks &amp; Visemes</strong> alongside audio</span>
+                  </label>
+                </div>
+                <div id="speech-marks-types-row" class="speech-marks-types-grid">
+                  <label class="effect-chip-toggle">
+                    <input type="checkbox" class="speech-mark-type-cb" value="viseme" checked />
+                    <span><code>viseme</code> (Mouth Lip-Sync)</span>
+                  </label>
+                  <label class="effect-chip-toggle">
+                    <input type="checkbox" class="speech-mark-type-cb" value="word" checked />
+                    <span><code>word</code> (Word Offsets)</span>
+                  </label>
+                  <label class="effect-chip-toggle">
+                    <input type="checkbox" class="speech-mark-type-cb" value="sentence" checked />
+                    <span><code>sentence</code> (Sentences)</span>
+                  </label>
+                  <label class="effect-chip-toggle">
+                    <input type="checkbox" class="speech-mark-type-cb" value="ssml" />
+                    <span><code>ssml</code> (&lt;mark/&gt; Tags)</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Active Lexicons Selection -->
+              <div class="field-group">
+                <div class="label-row">
+                  <label class="field-label">Active Pronunciation Lexicons (<code>LexiconNames</code> · max 5)</label>
+                  <button type="button" id="manage-lexicons-link" class="link-btn">Manage Lexicons →</button>
+                </div>
+                <div id="active-lexicons-pills" class="lexicon-pills-wrap">
+                  <span class="muted-note">No custom lexicons selected</span>
+                </div>
+              </div>
+
+              <!-- Synthesize CTA -->
+              <div class="synthesize-cta-row">
+                <button id="synthesize-btn" type="button" class="studio-btn studio-btn-primary studio-btn-large">
+                  🎙️ Generate Voice Audio
+                </button>
+              </div>
+
+              <div id="synthesis-error-box" class="error-banner" hidden></div>
+
+              <details class="payload-inspector-details">
+                <summary>Inspect Amazon Polly Request Payload &amp; Effective SSML</summary>
+                <pre id="payload-preview-code" class="code-preview"></pre>
+              </details>
+            </div>
+
+            <!-- Active Player & Synchronized Viseme / Word Inspector -->
+            <div class="panel player-panel" id="active-player-panel">
+              <div class="section-header-row">
+                <div>
+                  <span class="payload-label">Studio Monitor &amp; Lip-Sync Inspector</span>
+                  <h3 class="section-title" id="player-title">Ready to Synthesize</h3>
+                </div>
+                <span id="player-meta-badge" class="status-badge status-idle">No audio loaded</span>
+              </div>
+
+              <div id="player-empty-state" class="empty-state-box">
+                Select any Amazon Polly voice and click <strong>Generate Voice Audio</strong> (or click <strong>▶ Sample</strong> on any voice card) to preview audio and inspect word/viseme timestamps.
+              </div>
+
+              <div id="player-active-content" class="player-active-content" hidden>
+                <audio id="studio-audio-player" class="studio-audio-element" controls preload="metadata"></audio>
+
+                <div class="player-actions-bar">
+                  <a id="player-download-btn" class="studio-btn studio-btn-primary" href="#" download>
+                    ⬇ Download Audio
+                  </a>
+                  <button id="copy-server-path-btn" type="button" class="studio-btn studio-btn-secondary" title="Copy local server path for InfiniteTalk Volume Path mode">
+                    📋 Copy Server Path
+                  </button>
+                  <button id="copy-audio-url-btn" type="button" class="studio-btn studio-btn-secondary" title="Copy URL for InfiniteTalk / MiniMax">
+                    🔗 Copy Audio URL
+                  </button>
+                </div>
+
+                <div id="pipeline-bridge-info" class="pipeline-bridge-box">
+                  <div class="bridge-line">
+                    <span class="bridge-label">Server Path (InfiniteTalk Path Mode):</span>
+                    <code id="bridge-server-path">-</code>
+                  </div>
+                </div>
+
+                <!-- Live Viseme & Word Readout -->
+                <div id="viseme-inspector-wrap" class="viseme-inspector-wrap" hidden>
+                  <div class="viseme-header-bar">
+                    <div>
+                      <span class="field-label">Synchronized Word &amp; Viseme Lip-Sync Track</span>
+                    </div>
+                    <div class="viseme-live-badges">
+                      <span class="viseme-chip">Active Viseme: <strong id="active-viseme-code">-</strong></span>
+                      <span class="viseme-chip">Word: <strong id="active-word-text">-</strong></span>
+                    </div>
+                  </div>
+                  <div id="synchronized-transcript" class="synchronized-transcript"></div>
+                  <details class="marks-table-details">
+                    <summary>View Raw Speech Marks Timeline (<span id="marks-count-label">0</span> events)</summary>
+                    <div class="marks-table-scroll">
+                      <table class="marks-table">
+                        <thead>
+                          <tr>
+                            <th>Time (ms)</th>
+                            <th>Type</th>
+                            <th>Value / Viseme</th>
+                            <th>Byte Offset</th>
+                          </tr>
+                        </thead>
+                        <tbody id="marks-table-body"></tbody>
+                      </table>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 2: Long-Form Async S3 Synthesis (StartSpeechSynthesisTask) -->
+        <section id="tab-panel-async" class="panel async-panel" hidden>
+          <div class="section-header-row">
+            <div>
+              <span class="payload-label">Asynchronous S3 Batch Synthesis · StartSpeechSynthesisTask</span>
+              <h3 class="section-title">Long-Form S3 Synthesis Tasks (Up to 100,000 Billed Characters)</h3>
+            </div>
+            <button id="refresh-tasks-btn" type="button" class="studio-btn studio-btn-secondary">
+              ↻ Refresh Tasks
+            </button>
+          </div>
+
+          <p class="panel-subtitle">
+            Synthesize full scripts, audiobooks, or long video narrations directly into an Amazon S3 bucket using the currently selected Voice (<strong id="async-selected-voice">Ruth</strong>) and Engine (<strong id="async-selected-engine">generative</strong>).
+          </p>
+
+          <div class="async-form-grid">
+            <div class="field-group">
+              <label for="async-s3-bucket-input" class="field-label">Output S3 Bucket Name (<code>OutputS3BucketName</code>)</label>
+              <input id="async-s3-bucket-input" type="text" class="studio-input" placeholder="my-polly-audio-bucket" />
+            </div>
+            <div class="field-group">
+              <label for="async-s3-prefix-input" class="field-label">S3 Key Prefix (<code>OutputS3KeyPrefix</code>)</label>
+              <input id="async-s3-prefix-input" type="text" class="studio-input" placeholder="polly-outputs/" />
+            </div>
+            <div class="field-group">
+              <label for="async-sns-arn-input" class="field-label">SNS Topic ARN (Optional <code>SnsTopicArn</code>)</label>
+              <input id="async-sns-arn-input" type="text" class="studio-input" placeholder="arn:aws:sns:us-east-1:123456789012:polly-done" />
+            </div>
+            <div class="field-group">
+              <label for="async-format-select" class="field-label">Output Format</label>
+              <select id="async-format-select" class="studio-select">
+                <option value="mp3">MP3 (audio/mpeg)</option>
+                <option value="ogg_vorbis">Ogg Vorbis (audio/ogg)</option>
+                <option value="pcm">PCM 16-bit (audio/pcm)</option>
+                <option value="json">Speech Marks JSON (application/x-json-stream)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="synthesize-cta-row">
+            <button id="start-async-task-btn" type="button" class="studio-btn studio-btn-primary">
+              ☁️ Start S3 Synthesis Task (Uses Script from Editor)
+            </button>
+          </div>
+
+          <div id="async-task-error" class="error-banner" hidden></div>
+
+          <div class="tasks-list-wrap">
+            <h4 class="sub-heading">Recent Synthesis Tasks in Region</h4>
+            <div id="async-tasks-container" class="tasks-table-wrap">
+              <div class="empty-state-box">No S3 synthesis tasks found in this region.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: Custom Pronunciation Lexicon Manager -->
+        <section id="tab-panel-lexicons" class="panel lexicons-panel" hidden>
+          <div class="section-header-row">
+            <div>
+              <span class="payload-label">W3C PLS 1.0 Pronunciation Lexicons · PutLexicon / ListLexicons</span>
+              <h3 class="section-title">Custom Pronunciation Lexicon Manager</h3>
+            </div>
+            <div class="badge-row">
+              <button id="load-sample-lexicon-btn" type="button" class="studio-btn studio-btn-secondary">
+                Load PLS XML Template
+              </button>
+              <button id="refresh-lexicons-btn" type="button" class="studio-btn studio-btn-secondary">
+                ↻ Refresh
+              </button>
+            </div>
+          </div>
+
+          <div class="workspace-grid">
+            <div class="workspace-col">
+              <div class="field-group">
+                <label for="lexicon-name-input" class="field-label">Lexicon Name (Alphanumeric, 1–20 chars)</label>
+                <input id="lexicon-name-input" type="text" class="studio-input" placeholder="VideoAlphaTerms" maxlength="20" />
+              </div>
+              <div class="field-group">
+                <label for="lexicon-content-textarea" class="field-label">PLS 1.0 XML Content</label>
+                <textarea id="lexicon-content-textarea" class="studio-textarea code-textarea" rows="10"></textarea>
+              </div>
+              <button id="save-lexicon-btn" type="button" class="studio-btn studio-btn-primary">
+                💾 Save Lexicon to AWS Polly
+              </button>
+              <div id="lexicon-status-msg" class="error-banner" hidden></div>
+            </div>
+
+            <div class="workspace-col">
+              <h4 class="sub-heading">Installed Lexicons in Selected Region</h4>
+              <div id="lexicons-list-container" class="lexicons-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Generated Voices History -->
+        <section class="panel history-panel" aria-label="Generated Voices History">
+          <div class="section-header-row">
+            <div>
+              <span class="payload-label">Local Studio Cache · backend/polly_studio/outputs</span>
+              <h3 class="section-title">
+                Generated Voices History
+                <span id="history-count-chip" class="count-chip">0</span>
+              </h3>
+            </div>
+          </div>
+
+          <div id="history-list" class="history-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="static/app.js"></script>
+  </body>
+</html>

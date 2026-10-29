@@ -20,6 +20,7 @@ sudo systemctl restart videoalpha-backend
 sleep 2
 curl -sf http://127.0.0.1:8000/health && echo " backend OK"
 curl -sf http://127.0.0.1:8000/minimax-app/health && echo " minimax-app OK"
+curl -sf http://127.0.0.1:8000/polly-app/health && echo " polly-app OK"
 
 echo "== Frontend =="
 cd "$APP_DIR/frontend"
@@ -51,6 +52,31 @@ block = """    location = /minimax-app {
 
 """
 if "location / {" in txt and "location /minimax-app/" not in txt:
+    txt = txt.replace("    location / {", block + "    location / {", 1)
+    p.write_text(txt)
+PY
+fi
+if [ -n "$NGINX_CONF" ] && ! grep -q "location /polly-app/" "$NGINX_CONF"; then
+  sudo python3 - "$NGINX_CONF" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+txt = p.read_text()
+block = """    location = /polly-app {
+        return 301 /polly-app/;
+    }
+
+    location /polly-app/ {
+        proxy_pass http://127.0.0.1:8000/polly-app/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+"""
+if "location / {" in txt and "location /polly-app/" not in txt:
     txt = txt.replace("    location / {", block + "    location / {", 1)
     p.write_text(txt)
 PY

@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, Sparkles, Briefcase, GitBranch,
-  Settings, ChevronLeft, Video, Film, Clapperboard
+  Settings, ChevronLeft, Video, Film, Clapperboard, Volume2
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: '/workflow', icon: Sparkles, label: 'Create' },
   { to: '/ltx', icon: Film, label: 'LTX Generation' },
   { to: '/minimax', icon: Clapperboard, label: 'MiniMax H3' },
+  { to: '/voices', icon: Volume2, label: 'Generate Voices' },
   { to: '/jobs', icon: Briefcase, label: 'Jobs' },
   { to: '/architecture', icon: GitBranch, label: 'Architecture' },
 ];
@@ -244,7 +245,15 @@ export function MobileBottomNav({ onSettingsOpen }: { onSettingsOpen: () => void
             >
               <Icon size={18} style={{ color: active ? '#A78BFA' : 'rgba(255,255,255,0.45)' }} />
               <span style={{ fontSize: '10px', fontWeight: active ? 600 : 400, marginTop: 2 }}>
-                {label === 'Architecture' ? 'Flow' : label === 'LTX Generation' ? 'LTX 2.5' : label === 'MiniMax H3' ? 'MiniMax' : label}
+                {label === 'Architecture'
+                  ? 'Flow'
+                  : label === 'LTX Generation'
+                  ? 'LTX 2.5'
+                  : label === 'MiniMax H3'
+                  ? 'MiniMax'
+                  : label === 'Generate Voices'
+                  ? 'Voices'
+                  : label}
               </span>
             </div>
           </NavLink>
