@@ -132,7 +132,7 @@ MINIMAX_POD_IMAGE = os.environ.get(
     "MINIMAX_POD_IMAGE", "hearmeman/comfyui-minimax-template:v10"
 ).strip()
 MINIMAX_VOLUME_ID = os.environ.get(
-    "MINIMAX_VOLUME_ID", "cmvtrnt3d000207jq49ta8tvj"
+    "MINIMAX_VOLUME_ID", "cmvtuxnsj000007l0gj0w1v8e"
 ).strip()
 MINIMAX_VOLUME_NAME = os.environ.get(
     "MINIMAX_VOLUME_NAME", "videoalpha-models"

@@ -1045,7 +1045,7 @@ function renderPodControlState(data) {
     podTitle.textContent = "No MiniMax H3 Pod Active";
     const volLabel =
       vol.kind === "global"
-        ? `${vol.name || "videoalpha-models"} (${vol.id || "cmvtrnt3d000207jq49ta8tvj"} · global · mounts at ${vol.mount_path || "/workspace"})`
+        ? `${vol.name || "videoalpha-models"} (${vol.id || "cmvtuxnsj000007l0gj0w1v8e"} · global · mounts at ${vol.mount_path || "/workspace"})`
         : `${vol.name || "ltx25-models"} (${vol.id || "vkqbtcijow"} · ${vol.size_gb || 165} GB · ${vol.data_center_id || "EUR-IS-2"} → ${vol.mount_path || "/workspace"})`;
     podSubtitle.innerHTML = `Shared models volume ready: <code>${volLabel}</code>`;
     podGpuSelect.hidden = false;

@@ -343,6 +343,6 @@ Ordered by value per unit of effort. Each phase has an exit criterion so progres
 | Not installed | Docker, Redis, Postgres |
 | Output caches | `~/app/backend/outputs` 6.1 MB, `~/ltx25/outputs` 2.2 MB, minimax 4 KB |
 | SPA build | 524 KB JS (162 KB gzip) + 100 KB CSS (16 KB gzip) |
-| Pod volume | `cmvtrnt3d000207jq49ta8tvj` = `videoalpha-models`, global volume → `/workspace` |
+| Pod volume | `cmvtuxnsj000007l0gj0w1v8e` = `videoalpha-models`, global volume → `/workspace` |
 | Pod images | LTX `notrius/ltx-2.5-serverless:cu130`; MiniMax `hearmeman/comfyui-minimax-template:v10` |
 | RunPod key source | systemd `EnvironmentFile` (`~/app/backend/.env`, `~/ltx25/.env`); local dev falls back to `.devin/mcp_config*.json` |
