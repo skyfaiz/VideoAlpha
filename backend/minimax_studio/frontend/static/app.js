@@ -126,6 +126,8 @@ const podJupyterLink = document.querySelector("#pod-jupyter-link");
 const podRefreshBtn = document.querySelector("#pod-refresh-btn");
 const podLogsDetails = document.querySelector("#pod-logs-details");
 const podLogsOutput = document.querySelector("#pod-logs-output");
+const podCostHistoryDetails = document.querySelector("#pod-cost-history-details");
+const podCostHistoryOutput = document.querySelector("#pod-cost-history-output");
 
 const POD_STATUS_POLL_INTERVAL_MS = 2500;
 const POD_STATUS_POLL_TIMEOUT_MS = 25 * 60 * 1000;
@@ -919,9 +921,35 @@ function describeRun(run) {
   const reason =
     run.reason === "idle-timeout"
       ? "auto-terminated after idle timeout"
+      : run.reason === "stopped"
+      ? "stopped"
       : "terminated";
   const clock = run.terminated_clock || formatClock(run.terminated_at);
-  return `Last Pod run: ${duration} (${reason}${clock ? ` at ${clock}` : ""})`;
+  const cost = typeof run.cost === "number" ? ` · $${run.cost.toFixed(2)}` : "";
+  return `Last Pod run: ${duration} (${reason}${clock ? ` at ${clock}` : ""})${cost}`;
+}
+
+function renderCostHistory(history, totalCost) {
+  if (!podCostHistoryDetails || !podCostHistoryOutput) return;
+  const runs = Array.isArray(history) ? history : [];
+  if (!runs.length) {
+    podCostHistoryDetails.hidden = true;
+    return;
+  }
+  const lines = runs.map((run) => {
+    const clock = run.terminated_clock || formatClock(run.terminated_at);
+    const duration = run.duration_display || formatCountdown(run.duration_seconds);
+    const cost = typeof run.cost === "number" ? `$${run.cost.toFixed(2)}` : "—";
+    const gpu = run.gpu_name || "";
+    const reason =
+      run.reason === "idle-timeout" ? "idle-timeout" : run.reason || "terminated";
+    return `${clock || "—"} · ${cost} · ${duration} · ${reason}${gpu ? ` · ${gpu}` : ""}`;
+  });
+  if (typeof totalCost === "number") {
+    lines.push(`— total to date $${totalCost.toFixed(2)} —`);
+  }
+  podCostHistoryOutput.textContent = lines.join("\n");
+  podCostHistoryDetails.hidden = false;
 }
 
 function renderPodMeta(data, tickOnly = false) {
@@ -931,7 +959,11 @@ function renderPodMeta(data, tickOnly = false) {
   const parts = [];
 
   if (pod && pod.runtime_display) {
-    parts.push(`Pod running for ${pod.runtime_display}`);
+    const costCopy =
+      typeof pod.runtime_cost === "number"
+        ? ` · cost so far $${pod.runtime_cost.toFixed(2)}`
+        : "";
+    parts.push(`Pod running for ${pod.runtime_display}${costCopy}`);
   }
   if (idle.enabled) {
     if (pod && pod.phase === "READY") {
@@ -959,6 +991,9 @@ function renderPodMeta(data, tickOnly = false) {
   const lastRun = data?.last_run;
   if (!pod && lastRun) {
     parts.push(describeRun(lastRun));
+  }
+  if (typeof data?.total_cost === "number") {
+    parts.push(`Total compute cost to date $${data.total_cost.toFixed(2)}`);
   }
 
   podMeta.textContent = parts.join(" · ");
@@ -1000,6 +1035,7 @@ function renderPodControlState(data) {
       : null;
   startPodIdleTicker();
   renderPodMeta(data);
+  renderCostHistory(data?.run_history, data?.total_cost);
 
   if (!pod) {
     podStatusBadge.textContent = "Not Deployed ($0/hr compute)";

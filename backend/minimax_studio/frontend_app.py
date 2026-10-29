@@ -165,15 +165,15 @@ MINIMAX_GPU_OPTIONS = [
     },
     {
         "id": "NVIDIA H100 80GB HBM3",
-        "label": "NVIDIA H100 · 80 GB HBM3 ($2.69/hr)",
+        "label": "NVIDIA H100 · 80 GB HBM3 ($3.99/hr)",
         "vram_gb": 80,
-        "price_hr": 2.69,
+        "price_hr": 3.99,
     },
     {
         "id": "NVIDIA GeForce RTX 5090",
-        "label": "NVIDIA RTX 5090 · 32 GB VRAM ($0.89/hr)",
+        "label": "NVIDIA RTX 5090 · 32 GB VRAM ($1.19/hr)",
         "vram_gb": 32,
-        "price_hr": 0.89,
+        "price_hr": 1.19,
     },
 ]
 
@@ -198,7 +198,37 @@ POD_ACTIVITY: dict[str, Any] = {
     "auto_terminated_at": None,
     "auto_terminated_pod_id": "",
 }
-POD_RUN_HISTORY: list[dict[str, Any]] = []
+POD_COST_HISTORY_FILE = CACHED_OUTPUTS_DIR / "pod_cost_history.json"
+
+
+def load_pod_cost_history() -> list[dict[str, Any]]:
+    try:
+        if POD_COST_HISTORY_FILE.exists():
+            raw = json.loads(POD_COST_HISTORY_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, list):
+                return raw
+    except Exception:
+        pass
+    return []
+
+
+def save_pod_cost_history() -> None:
+    try:
+        POD_COST_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        POD_COST_HISTORY_FILE.write_text(
+            json.dumps(POD_RUN_HISTORY, indent=2), encoding="utf-8"
+        )
+    except Exception:
+        pass
+
+
+def total_pod_cost() -> float:
+    return round(
+        sum(float(entry.get("cost") or 0.0) for entry in POD_RUN_HISTORY), 4
+    )
+
+
+POD_RUN_HISTORY: list[dict[str, Any]] = load_pod_cost_history()
 _POD_WATCHDOG_TASK: asyncio.Task | None = None
 
 
@@ -604,17 +634,26 @@ def record_pod_run(pod: dict[str, Any] | None, reason: str) -> dict[str, Any] | 
     if started is None or not (pod or {}).get("id"):
         return None
     terminated_at = time.time()
+    duration = terminated_at - started
+    cost_per_hr = (pod or {}).get("cost")
+    cost = None
+    if isinstance(cost_per_hr, (int, float)) and cost_per_hr >= 0:
+        cost = round(float(cost_per_hr) * (duration / 3600.0), 4)
     entry = {
         "pod_id": pod.get("id", ""),
+        "gpu_name": ((pod.get("gpu") or {}).get("id") or "GPU"),
         "started_at": iso_utc(started),
         "terminated_at": iso_utc(terminated_at),
         "terminated_clock": local_clock(terminated_at),
-        "duration_seconds": round(terminated_at - started, 1),
-        "duration_display": format_duration(terminated_at - started),
+        "duration_seconds": round(duration, 1),
+        "duration_display": format_duration(duration),
+        "cost_per_hr": cost_per_hr if isinstance(cost_per_hr, (int, float)) else None,
+        "cost": cost,
         "reason": reason,
     }
     POD_RUN_HISTORY.insert(0, entry)
     del POD_RUN_HISTORY[POD_RUN_HISTORY_LIMIT:]
+    save_pod_cost_history()
     return entry
 
 
@@ -805,6 +844,7 @@ def format_pod_status_payload(
             "idle": pod_idle_payload(False),
             "last_run": POD_RUN_HISTORY[0] if POD_RUN_HISTORY else None,
             "run_history": POD_RUN_HISTORY[:5],
+            "total_cost": total_pod_cost(),
         }
 
     pod_id = pod.get("id", "")
@@ -825,6 +865,10 @@ def format_pod_status_payload(
     pod_env = pod.get("env") or {}
     quant_profile = pod_env.get("minimax_quant", MINIMAX_DEFAULT_QUANT)
     runtime = pod_runtime_seconds(pod)
+    pod_cost = pod.get("cost")
+    runtime_cost = None
+    if isinstance(pod_cost, (int, float)) and runtime is not None:
+        runtime_cost = round(float(pod_cost) * (runtime / 3600.0), 4)
 
     return {
         "exists": True,
@@ -848,6 +892,7 @@ def format_pod_status_payload(
             "started_at": pod.get("startedAt"),
             "runtime_seconds": None if runtime is None else round(runtime, 1),
             "runtime_display": format_duration(runtime),
+            "runtime_cost": runtime_cost,
         },
         "logs": logs,
         "default_volume": default_vol,
@@ -856,6 +901,7 @@ def format_pod_status_payload(
         "idle": pod_idle_payload(status == "RUNNING" and ready),
         "last_run": POD_RUN_HISTORY[0] if POD_RUN_HISTORY else None,
         "run_history": POD_RUN_HISTORY[:5],
+        "total_cost": total_pod_cost(),
     }
 
 
@@ -962,10 +1008,14 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
             if request.quant_profile.strip().lower() in QUANT_PROFILES
             else MINIMAX_DEFAULT_QUANT
         )
-        preferred_gpu = request.gpu_id.strip() or MINIMAX_GPU_OPTIONS[0]["id"]
-        candidate_gpus = [preferred_gpu] + [
-            g["id"] for g in MINIMAX_GPU_OPTIONS if g["id"] != preferred_gpu
-        ]
+        gpu_id = request.gpu_id.strip() or MINIMAX_GPU_OPTIONS[0]["id"]
+        known_gpu_ids = {g["id"] for g in MINIMAX_GPU_OPTIONS}
+        if gpu_id not in known_gpu_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown GPU type '{gpu_id}'. Choose one of: "
+                + ", ".join(sorted(known_gpu_ids)),
+            )
 
         pod_env: dict[str, str] = {
             "download_minimax_h3": "true",
@@ -979,47 +1029,50 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
             pod_env["OPENROUTER_API_KEY"] = DEFAULT_OPENROUTER_API_KEY
             pod_env["LLM_KEY"] = DEFAULT_OPENROUTER_API_KEY
 
-        last_error = "No GPU stock available in data center."
-        for gpu_id in candidate_gpus:
-            create_body = {
-                "name": MINIMAX_POD_NAME,
-                "image": MINIMAX_POD_IMAGE,
-                "cloud": "SECURE",
-                "dataCenterIds": [dc_id],
-                "disk": 80,
-                "ports": ["8188/http", "8888/http"],
-                "mounts": {
-                    "network": [
-                        {
-                            "volumeId": volume_id,
-                            "path": MINIMAX_MOUNT_PATH,
-                        }
-                    ]
-                },
-                "gpu": {
-                    "id": gpu_id,
-                    "count": 1,
-                    "minCudaVersion": "13.0",
-                },
-                "env": pod_env,
-            }
-            try:
-                created = await call_runpod_mcp(
-                    session, "create-pod", {"body": create_body}
-                )
-                if created and created.get("id"):
-                    verified = await call_runpod_mcp(
-                        session, "get-pod", {"id": created["id"]}
-                    )
-                    mark_pod_activity("pod-deploy")
-                    return format_pod_status_payload(verified or created, False, [])
-            except HTTPException as exc:
-                last_error = exc.detail
-                continue
+        create_body = {
+            "name": MINIMAX_POD_NAME,
+            "image": MINIMAX_POD_IMAGE,
+            "cloud": "SECURE",
+            "dataCenterIds": [dc_id],
+            "disk": 80,
+            "ports": ["8188/http", "8888/http"],
+            "mounts": {
+                "network": [
+                    {
+                        "volumeId": volume_id,
+                        "path": MINIMAX_MOUNT_PATH,
+                    }
+                ]
+            },
+            "gpu": {
+                "id": gpu_id,
+                "count": 1,
+                "minCudaVersion": "13.0",
+            },
+            "env": pod_env,
+        }
+        try:
+            created = await call_runpod_mcp(
+                session, "create-pod", {"body": create_body}
+            )
+        except HTTPException as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"Could not deploy '{gpu_id}' in data center {dc_id}: "
+                    f"{exc.detail} Pick a different GPU and try again."
+                ),
+            ) from exc
 
-        raise HTTPException(
-            status_code=503, detail=f"Pod deployment failed: {last_error}"
-        )
+        if not created or not created.get("id"):
+            raise HTTPException(
+                status_code=503,
+                detail=f"Pod deployment for '{gpu_id}' returned no pod id.",
+            )
+
+        verified = await call_runpod_mcp(session, "get-pod", {"id": created["id"]})
+        mark_pod_activity("pod-deploy")
+        return format_pod_status_payload(verified or created, False, [])
 
 
 @app.post("/api/pod/action")
@@ -1038,19 +1091,31 @@ async def pod_action_endpoint(request: PodLifecycleActionRequest) -> dict[str, A
         if request.action == "terminate":
             pod_obj = await find_minimax_pod(session)
             await call_runpod_mcp(session, "delete-pod", {"id": pod_id})
-            record_pod_run(
-                pod_obj if (pod_obj or {}).get("id") == pod_id else None,
-                reason="terminated",
-            )
+            if (pod_obj or {}).get("status") == "RUNNING":
+                record_pod_run(
+                    pod_obj if (pod_obj or {}).get("id") == pod_id else None,
+                    reason="terminated",
+                )
             POD_ACTIVITY["last_activity_at"] = None
             POD_ACTIVITY["last_reason"] = "terminated"
             return format_pod_status_payload(None, False, [])
+
+        pre_action_pod = None
+        if request.action == "stop":
+            try:
+                pre_action_pod = await call_runpod_mcp(
+                    session, "get-pod", {"id": pod_id}
+                )
+            except Exception:
+                pre_action_pod = None
 
         updated = await call_runpod_mcp(
             session,
             "pod-action",
             {"id": pod_id, "body": {"action": request.action}},
         )
+        if request.action == "stop" and (pre_action_pod or {}).get("status") == "RUNNING":
+            record_pod_run(pre_action_pod, reason="stopped")
         mark_pod_activity(f"pod-{request.action}")
         refreshed = await call_runpod_mcp(session, "get-pod", {"id": pod_id})
         pod_obj = refreshed or updated
