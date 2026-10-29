@@ -15,10 +15,10 @@ export function LtxPage() {
         <div className="flex items-center gap-2.5 flex-wrap">
           <div
             className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full"
-            style={{ background: 'rgba(139,92,246,0.14)', border: '1px solid rgba(139,92,246,0.3)' }}
+            style={{ background: 'rgba(239,68,68,0.14)', border: '1px solid rgba(239,68,68,0.35)' }}
           >
-            <Sparkles size={11} style={{ color: '#A78BFA' }} />
-            <span style={{ fontSize: '10px', fontWeight: 600, color: '#C4B5FD' }}>LTX 2.5 · Distilled INT8 Pod</span>
+            <Sparkles size={11} style={{ color: '#F87171' }} />
+            <span style={{ fontSize: '10px', fontWeight: 600, color: '#FCA5A5' }}>LTX 2.5 · Out of Service</span>
           </div>
           <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
             Models Volume: <code style={{ color: '#22D3EE' }}>videoalpha-models (global)</code>
