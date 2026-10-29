@@ -131,10 +131,16 @@ MINIMAX_POD_NAME = os.environ.get("MINIMAX_POD_NAME", "minimax-h3-pod").strip()
 MINIMAX_POD_IMAGE = os.environ.get(
     "MINIMAX_POD_IMAGE", "hearmeman/comfyui-minimax-template:v10"
 ).strip()
-MINIMAX_VOLUME_ID = os.environ.get("MINIMAX_VOLUME_ID", "vkqbtcijow").strip()
-MINIMAX_VOLUME_NAME = os.environ.get("MINIMAX_VOLUME_NAME", "ltx25-models").strip()
-MINIMAX_VOLUME_SIZE_GB = int(os.environ.get("MINIMAX_VOLUME_SIZE_GB", "165"))
-MINIMAX_DATA_CENTER_ID = os.environ.get("MINIMAX_DATA_CENTER_ID", "EUR-IS-2").strip()
+MINIMAX_VOLUME_ID = os.environ.get(
+    "MINIMAX_VOLUME_ID", "cmvtrnt3d000207jq49ta8tvj"
+).strip()
+MINIMAX_VOLUME_NAME = os.environ.get(
+    "MINIMAX_VOLUME_NAME", "videoalpha-models"
+).strip()
+MINIMAX_VOLUME_SIZE_GB = int(os.environ.get("MINIMAX_VOLUME_SIZE_GB", "0"))
+MINIMAX_VOLUME_KIND = os.environ.get("MINIMAX_VOLUME_KIND", "global").strip().lower()
+# Global volumes mount in any data center; leave empty to let the scheduler pick.
+MINIMAX_DATA_CENTER_ID = os.environ.get("MINIMAX_DATA_CENTER_ID", "").strip()
 MINIMAX_MOUNT_PATH = os.environ.get("MINIMAX_MOUNT_PATH", "/workspace").strip()
 MINIMAX_DEFAULT_QUANT = os.environ.get("MINIMAX_DEFAULT_QUANT", "int8").strip()
 MINIMAX_HF_SECRET_REF = os.environ.get(
@@ -540,11 +546,11 @@ async def find_minimax_pod(session: aiohttp.ClientSession) -> dict[str, Any] | N
 
 
 async def fetch_available_gpu_options() -> list[dict[str, Any]]:
-    """GPU types with deployable stock in the configured data center.
+    """GPU types with deployable stock (secure cloud, 1 GPU, CUDA >= 13.0).
 
-    Queries the RunPod catalog (secure cloud, 1 GPU, CUDA >= 13.0) and keeps
-    only entries reporting availability in MINIMAX_DATA_CENTER_ID — the
-    persistent volume is pinned there, so other regions cannot deploy anyway.
+    When MINIMAX_DATA_CENTER_ID is set the volume is pinned there and only
+    GPUs available in that data center are kept; with a global volume the pod
+    can land anywhere, so overall availability is used instead.
     """
     now = time.monotonic()
     if (
@@ -570,18 +576,24 @@ async def fetch_available_gpu_options() -> list[dict[str, Any]]:
         gpu_id = gpu.get("id")
         if not gpu.get("secure") or not gpu_id:
             continue
-        dc = next(
-            (
-                d
-                for d in gpu.get("dataCenters") or []
-                if d.get("id") == MINIMAX_DATA_CENTER_ID
-            ),
-            None,
+        dc = (
+            next(
+                (
+                    d
+                    for d in gpu.get("dataCenters") or []
+                    if d.get("id") == MINIMAX_DATA_CENTER_ID
+                ),
+                None,
+            )
+            if MINIMAX_DATA_CENTER_ID
+            else {}
         )
         if dc is None:
             continue
         availability = (
-            dc.get("availability") or gpu.get("availability") or ""
+            (dc.get("availability") if dc else None)
+            or gpu.get("availability")
+            or ""
         ).upper()
         if availability in ("", "NONE", "OUT"):
             continue
@@ -908,6 +920,7 @@ def format_pod_status_payload(
         "size_gb": MINIMAX_VOLUME_SIZE_GB,
         "data_center_id": MINIMAX_DATA_CENTER_ID,
         "mount_path": MINIMAX_MOUNT_PATH,
+        "kind": MINIMAX_VOLUME_KIND,
     }
     if not pod:
         return {
@@ -934,9 +947,10 @@ def format_pod_status_payload(
     else:
         phase = status
 
-    net_mounts = ((pod.get("mounts") or {}).get("network")) or []
-    vol_id = net_mounts[0].get("volumeId") if net_mounts else MINIMAX_VOLUME_ID
-    mount_path = net_mounts[0].get("path") if net_mounts else MINIMAX_MOUNT_PATH
+    mounts = pod.get("mounts") or {}
+    vol_mounts = (mounts.get("network") or []) + (mounts.get("global") or [])
+    vol_id = vol_mounts[0].get("volumeId") if vol_mounts else MINIMAX_VOLUME_ID
+    mount_path = vol_mounts[0].get("path") if vol_mounts else MINIMAX_MOUNT_PATH
     gpu_info = pod.get("gpu") or {}
     pod_env = pod.get("env") or {}
     quant_profile = pod_env.get("minimax_quant", MINIMAX_DEFAULT_QUANT)
@@ -1115,10 +1129,11 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
             g["id"] for g in MINIMAX_GPU_OPTIONS
         }
         if gpu_id not in known_gpu_ids:
+            where = f"data center {dc_id}" if dc_id else "any data center"
             raise HTTPException(
                 status_code=400,
-                detail=f"GPU '{gpu_id}' is not available in data center "
-                f"{dc_id} right now. Choose one of: "
+                detail=f"GPU '{gpu_id}' is not available in {where} "
+                "right now. Choose one of: "
                 + ", ".join(sorted(known_gpu_ids)),
             )
 
@@ -1134,21 +1149,22 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
             pod_env["OPENROUTER_API_KEY"] = DEFAULT_OPENROUTER_API_KEY
             pod_env["LLM_KEY"] = DEFAULT_OPENROUTER_API_KEY
 
+        mounts: dict[str, Any] = {}
+        if MINIMAX_VOLUME_KIND == "global":
+            mounts["global"] = [
+                {"volumeId": volume_id, "path": MINIMAX_MOUNT_PATH}
+            ]
+        else:
+            mounts["network"] = [
+                {"volumeId": volume_id, "path": MINIMAX_MOUNT_PATH}
+            ]
         create_body = {
             "name": MINIMAX_POD_NAME,
             "image": MINIMAX_POD_IMAGE,
             "cloud": "SECURE",
-            "dataCenterIds": [dc_id],
             "disk": 80,
             "ports": ["8188/http", "8888/http"],
-            "mounts": {
-                "network": [
-                    {
-                        "volumeId": volume_id,
-                        "path": MINIMAX_MOUNT_PATH,
-                    }
-                ]
-            },
+            "mounts": mounts,
             "gpu": {
                 "id": gpu_id,
                 "count": 1,
@@ -1156,15 +1172,18 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
             },
             "env": pod_env,
         }
+        if dc_id:
+            create_body["dataCenterIds"] = [dc_id]
         try:
             created = await call_runpod_mcp(
                 session, "create-pod", {"body": create_body}
             )
         except HTTPException as exc:
+            where = f"in data center {dc_id}" if dc_id else "in any data center"
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    f"Could not deploy '{gpu_id}' in data center {dc_id}: "
+                    f"Could not deploy '{gpu_id}' {where}: "
                     f"{exc.detail} Pick a different GPU and try again."
                 ),
             ) from exc

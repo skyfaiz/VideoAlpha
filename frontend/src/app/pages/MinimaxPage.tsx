@@ -21,7 +21,7 @@ export function MinimaxPage() {
             <span style={{ fontSize: '10px', fontWeight: 600, color: '#FBCFE8' }}>MiniMax H3 · Video + 32 kHz Audio Pod</span>
           </div>
           <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-            14 Workflows · Persistent Volume: <code style={{ color: '#22D3EE' }}>ltx25-models (vkqbtcijow · 165 GB)</code>
+            14 Workflows · Models Volume: <code style={{ color: '#22D3EE' }}>videoalpha-models (global)</code>
           </span>
         </div>
 

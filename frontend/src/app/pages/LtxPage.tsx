@@ -21,7 +21,7 @@ export function LtxPage() {
             <span style={{ fontSize: '10px', fontWeight: 600, color: '#C4B5FD' }}>LTX 2.5 · Distilled INT8 Pod</span>
           </div>
           <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-            Persistent Volume: <code style={{ color: '#22D3EE' }}>ltx25-models (vkqbtcijow · 165 GB)</code>
+            Models Volume: <code style={{ color: '#22D3EE' }}>videoalpha-models (global)</code>
           </span>
         </div>
 

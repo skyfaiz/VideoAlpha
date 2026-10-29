@@ -1043,7 +1043,11 @@ function renderPodControlState(data) {
     podStatusBadge.textContent = "Not Deployed ($0/hr compute)";
     podStatusBadge.className = "pod-status-badge pod-status-idle";
     podTitle.textContent = "No MiniMax H3 Pod Active";
-    podSubtitle.innerHTML = `Shared Persistent Volume ready: <code>${vol.name || "ltx25-models"} (${vol.id || "vkqbtcijow"} · ${vol.size_gb || 165} GB · ${vol.data_center_id || "EUR-IS-2"} → ${vol.mount_path || "/workspace"})</code>`;
+    const volLabel =
+      vol.kind === "global"
+        ? `${vol.name || "videoalpha-models"} (${vol.id || "cmvtrnt3d000207jq49ta8tvj"} · global · mounts at ${vol.mount_path || "/workspace"})`
+        : `${vol.name || "ltx25-models"} (${vol.id || "vkqbtcijow"} · ${vol.size_gb || 165} GB · ${vol.data_center_id || "EUR-IS-2"} → ${vol.mount_path || "/workspace"})`;
+    podSubtitle.innerHTML = `Shared models volume ready: <code>${volLabel}</code>`;
     podGpuSelect.hidden = false;
     podQuantSelect.hidden = false;
     podDeployBtn.hidden = false;
@@ -1167,7 +1171,7 @@ async function deployPodFromUi() {
   podDeployBtn.disabled = true;
   podDeployBtn.textContent = "Deploying...";
   setFeedback(
-    "Provisioning MiniMax H3 GPU Pod with persistent volume vkqbtcijow attached...",
+    "Provisioning MiniMax H3 GPU Pod with the shared models volume attached...",
     "success"
   );
   try {
@@ -1202,7 +1206,7 @@ async function deployPodFromUi() {
 async function triggerPodActionFromUi(action) {
   if (action === "terminate") {
     const ok = window.confirm(
-      "Terminate the MiniMax H3 Pod? Compute billing stops immediately and all MiniMax H3 & LTX models remain safely persisted on network volume vkqbtcijow (165 GB)."
+      "Terminate the MiniMax H3 Pod? Compute billing stops immediately and all MiniMax H3 & LTX models remain safely persisted on the shared models volume."
     );
     if (!ok) return;
   }
@@ -1227,7 +1231,7 @@ async function triggerPodActionFromUi(action) {
     renderPodControlState(data);
     setFeedback(
       action === "terminate"
-        ? "Pod terminated. Models remain saved on network volume vkqbtcijow."
+        ? "Pod terminated. Models remain saved on the shared models volume."
         : `Pod ${action} succeeded.`,
       "success"
     );

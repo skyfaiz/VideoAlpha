@@ -57,8 +57,8 @@ concrete change set are in §6.
                          │ RunPod GPU Pods (Secure Cloud)        │   │ RunPod S3 bucket      │
                          │  ltx25-pod        :7777 + :8188      │   │  media in / outputs   │
                          │  minimax-h3-pod   :8188 + :8888      │   └──────────────────────┘
-                         │  both mount vkqbtcijow → /workspace  │
-                         │  network volume 165 GB @ EUR-IS-2    │
+                         │  both mount videoalpha-models        │
+                         │  global volume → /workspace          │
                          └──────────────────────────────────────┘
 ```
 
@@ -110,7 +110,7 @@ media to the Pod's ComfyUI `/upload/image`, queues at `/prompt`, then polls
 ### 2.5 Pod lifecycle & safety
 
 - Discovery: `list-pods` filtered by name/image (`ltx25-pod`, `comfyui-minimax-template`).
-- Deploy: `create-pod` with GPU fallback list, `minCudaVersion 13.0`, network volume `vkqbtcijow` → `/workspace`.
+- Deploy: `create-pod` with the UI-selected GPU only, `minCudaVersion 13.0`, global volume `videoalpha-models` → `/workspace`.
 - Start / stop / restart / terminate via `pod-action` and `delete-pod`.
 - Readiness: LTX via `:7777/health`, MiniMax via `:8188/system_stats`.
 - **Idle watchdog (added this session):** terminates a `RUNNING`+ready Pod when no job arrives for
@@ -173,7 +173,7 @@ media to the Pod's ComfyUI `/upload/image`, queues at `/prompt`, then polls
 | **B3** | MCP call amplification | `/api/pod/status` = `list-pods` + `get-pod` + `stream-pod-logs`; SPA polls every 2.5 s (bootstrap) / 12 s (idle) | 3 MCP calls per client per poll; 10 tabs ≈ 30 calls/12 s ≈ 150/min against `mcp.runpod.io` |
 | **B4** | Serialized GPU work | One Pod per family; ComfyUI queue is FIFO single-worker | N users queue behind each other; MiniMax 2× upscale renders are long |
 | **B5** | Cold-start cost | MiniMax int8 set ≈ 80 GB models; LTX loads full model set at boot | Returning after the 3-min idle timeout pays 8–15 min again — the main UX/cost tension |
-| **B6** | Volume pinned to one DC | `vkqbtcijow` @ `EUR-IS-2`; RunPod docs: volume is data-center-scoped, one volume per DC, concurrent writes from multiple workers risk corruption | GPU availability limited to one DC; LTX+MiniMax simultaneous runs share one volume |
+| **B6** | Shared model volume | `videoalpha-models` (global volume, mounts in any DC); concurrent writes from multiple workers risk corruption | LTX+MiniMax simultaneous runs share one volume |
 | **B7** | Local output cache, no retention | `~/ltx25/outputs` 2.2 MB, `backend/outputs` 6.1 MB today; 11 GB free on `/` | Grows unbounded; disk exhaustion kills nginx + both services |
 | **B8** | Uploads through app memory | base64 modes parse whole payloads in RAM; nginx cap 210 MB | A few concurrent large uploads on 2 GB RAM → OOM/swap thrash |
 | **B9** | No auth, open CORS | `allow_origins=["*"]`; no API key/token on any route | Anyone with the URL can deploy GPUs (cost) and terminate Pods |
@@ -206,7 +206,7 @@ EC2 `t3.small` (~$15/mo) + 165 GB network volume (~$11.55/mo at $0.07/GB) are ro
 
 ## 5. Where the system is fragile (concrete failure modes)
 
-1. **Two users, two model families** — LTX and MiniMax Pods both mount `vkqbtcijow`; concurrent writes are
+1. **Two users, two model families** — LTX and MiniMax Pods both mount `videoalpha-models`; concurrent writes are
    documented as corruption-prone. Today nothing prevents both being deployed at once.
 2. **Idle watchdog vs. slow render** — if the browser tab closes mid-render, the EC2 side still tracks the
    job (`POD_SUBMIT_JOBS`) and the `/queue` check protects it; but if the Pod's ComfyUI is unreachable,
@@ -280,7 +280,7 @@ Ordered by value per unit of effort. Each phase has an exit criterion so progres
 4. **Auth**: shared bearer token or signed session for mutating routes (`/api/pod/*`, `/api/minimax/api/pod/*`);
    restrict CORS to the real origin.
 5. **Output retention**: prune cached media by age/size (e.g. 7 days, 2 GB cap) with a systemd timer.
-6. **Guard the volume**: refuse to deploy the second Pod family while one is running on `vkqbtcijow`
+6. **Guard the volume**: refuse to deploy the second Pod family while one is running on `videoalpha-models`
    (or require an explicit override), since concurrent writes risk corruption.
 7. Backups: snapshot `jobs_history.json` and `.env` off-box.
 
@@ -343,6 +343,6 @@ Ordered by value per unit of effort. Each phase has an exit criterion so progres
 | Not installed | Docker, Redis, Postgres |
 | Output caches | `~/app/backend/outputs` 6.1 MB, `~/ltx25/outputs` 2.2 MB, minimax 4 KB |
 | SPA build | 524 KB JS (162 KB gzip) + 100 KB CSS (16 KB gzip) |
-| Pod volume | `vkqbtcijow` = `ltx25-models`, 165 GB, `EUR-IS-2` → `/workspace` |
+| Pod volume | `cmvtrnt3d000207jq49ta8tvj` = `videoalpha-models`, global volume → `/workspace` |
 | Pod images | LTX `notrius/ltx-2.5-serverless:cu130`; MiniMax `hearmeman/comfyui-minimax-template:v10` |
 | RunPod key source | systemd `EnvironmentFile` (`~/app/backend/.env`, `~/ltx25/.env`); local dev falls back to `.devin/mcp_config*.json` |
