@@ -131,7 +131,7 @@ const podCostHistoryDetails = document.querySelector("#pod-cost-history-details"
 const podCostHistoryOutput = document.querySelector("#pod-cost-history-output");
 
 const POD_STATUS_POLL_INTERVAL_MS = 2500;
-const POD_STATUS_POLL_TIMEOUT_MS = 25 * 60 * 1000;
+const POD_STATUS_POLL_TIMEOUT_MS = 60 * 60 * 1000;
 let podLifecyclePollTimer = null;
 let gpuOptionsPollTimer = null;
 
