@@ -8,9 +8,9 @@ import {
 import {
   getStoredJobs,
   syncJobsWithBackend,
-  deleteInfinitetalkJob,
+  deleteBackendJob,
   removeStoredJob,
-  getInfinitetalkDownloadUrl,
+  getJobDownloadUrl,
   formatRelativeTime,
   type StoredJob
 } from '../services/api';
@@ -60,13 +60,16 @@ export function JobsPage() {
   }, [jobs]);
 
   const handleDelete = async (id: string) => {
+    const job = jobs.find(j => j.id === id);
     removeStoredJob(id);
     setJobs(getStoredJobs());
     if (selected === id) setSelected(null);
-    try {
-      await deleteInfinitetalkJob(id);
-    } catch {
-      // Ignore 404 if job was only in local storage
+    if (job) {
+      try {
+        await deleteBackendJob(job);
+      } catch {
+        // Ignore 404 if job was only in local storage
+      }
     }
   };
 
@@ -201,7 +204,7 @@ export function JobsPage() {
             {filtered.map((job, i) => {
               const st = STATUS_CONFIG[job.status];
               const isSelected = selected === job.id;
-              const downloadUrl = job.status === 'completed' ? getInfinitetalkDownloadUrl(job.id) : null;
+              const downloadUrl = job.status === 'completed' ? getJobDownloadUrl(job) : null;
               const shortId = job.id.slice(0, 8);
 
               return (

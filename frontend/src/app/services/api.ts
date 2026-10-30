@@ -71,11 +71,57 @@ export function getWanAnimateDownloadUrl(jobId: string, customName?: string): st
   return url;
 }
 
+// CharacterSwap (RunningHub) API
+export interface AppNode {
+  nodeId: string;
+  nodeName?: string;
+  fieldName: string;
+  fieldValue: any;
+  fieldType: string;
+  description?: string;
+  fieldData?: any;
+}
+
+export async function getCharacterSwapNodes(): Promise<{ app_id: string; nodes: AppNode[] }> {
+  const response = await axios.get(`${API_BASE}/characterswap/nodes`);
+  return response.data;
+}
+
+export async function submitCharacterSwapJob(formData: FormData): Promise<{ job_id: string }> {
+  const response = await axios.post(`${API_BASE}/characterswap/submit`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}
+
+export async function getCharacterSwapStatus(jobId: string): Promise<Job> {
+  const response = await axios.get(`${API_BASE}/characterswap/status/${jobId}`);
+  return response.data;
+}
+
+export async function getCharacterSwapJobs(): Promise<Job[]> {
+  const response = await axios.get(`${API_BASE}/characterswap/jobs`);
+  return response.data;
+}
+
+export async function deleteCharacterSwapJob(jobId: string): Promise<void> {
+  await axios.delete(`${API_BASE}/characterswap/jobs/${jobId}`);
+}
+
+export function getCharacterSwapDownloadUrl(jobId: string, customName?: string): string {
+  let url = `${API_BASE}/characterswap/download/${jobId}`;
+  if (customName) {
+    url += `?custom_name=${encodeURIComponent(customName)}`;
+  }
+  return url;
+}
+
 // Job storage for persistent tracking
 const JOBS_STORAGE_KEY = 'videoalpha_jobs';
 
 export interface StoredJob {
   id: string;
+  backend?: 'infinitetalk' | 'characterswap';
   type: string;
   name: string;
   prompt?: string;
@@ -138,35 +184,67 @@ export function mapBackendStatus(status: Job['status']): StoredJob['status'] {
   }
 }
 
+export function getJobDownloadUrl(job: StoredJob): string {
+  if (job.backend === 'characterswap' || job.type?.includes('Character Swap')) {
+    return getCharacterSwapDownloadUrl(job.id);
+  }
+  return getInfinitetalkDownloadUrl(job.id);
+}
+
+export async function deleteBackendJob(job: StoredJob): Promise<void> {
+  const targets =
+    job.backend === 'characterswap' || job.type?.includes('Character Swap')
+      ? [deleteCharacterSwapJob, deleteInfinitetalkJob]
+      : [deleteInfinitetalkJob, deleteCharacterSwapJob];
+  for (const fn of targets) {
+    try {
+      await fn(job.id);
+      return;
+    } catch {
+      // try next backend
+    }
+  }
+}
+
 export async function syncJobsWithBackend(): Promise<StoredJob[]> {
   try {
-    const backendJobs = await getInfinitetalkJobs();
+    const [infinitetalkJobs, characterswapJobs] = await Promise.all([
+      getInfinitetalkJobs().catch(() => [] as Job[]),
+      getCharacterSwapJobs().catch(() => [] as Job[]),
+    ]);
+    const backendJobs: [Job[], StoredJob['backend']][] = [
+      [infinitetalkJobs, 'infinitetalk'],
+      [characterswapJobs, 'characterswap'],
+    ];
     const localMap = new Map(getStoredJobs().map(j => [j.id, j]));
 
-    for (const bj of backendJobs) {
-      const mappedStatus = mapBackendStatus(bj.status);
-      const existing = localMap.get(bj.job_id);
-      const updated: StoredJob = {
-        id: bj.job_id,
-        type: bj.workflow_type || existing?.type || 'I2V Single',
-        name: bj.name || existing?.name || 'input_media',
-        prompt: bj.prompt || existing?.prompt,
-        resolution: bj.resolution || existing?.resolution || '544×960',
-        size: bj.size ?? existing?.size ?? null,
-        status: mappedStatus,
-        progress:
-          mappedStatus === 'completed'
-            ? 100
-            : mappedStatus === 'failed'
-            ? 0
-            : mappedStatus === 'processing'
-            ? Math.max(existing?.progress ?? 40, 40)
-            : 10,
-        createdAt: bj.created_at || existing?.createdAt || new Date().toISOString(),
-        completedAt: bj.completed_at || existing?.completedAt,
-        error: bj.error || existing?.error,
-      };
-      localMap.set(bj.job_id, updated);
+    for (const [jobsForBackend, backend] of backendJobs) {
+      for (const bj of jobsForBackend) {
+        const mappedStatus = mapBackendStatus(bj.status);
+        const existing = localMap.get(bj.job_id);
+        const updated: StoredJob = {
+          id: bj.job_id,
+          backend,
+          type: bj.workflow_type || existing?.type || 'I2V Single',
+          name: bj.name || existing?.name || 'input_media',
+          prompt: bj.prompt || existing?.prompt,
+          resolution: bj.resolution || existing?.resolution || '544×960',
+          size: bj.size ?? existing?.size ?? null,
+          status: mappedStatus,
+          progress:
+            mappedStatus === 'completed'
+              ? 100
+              : mappedStatus === 'failed'
+              ? 0
+              : mappedStatus === 'processing'
+              ? Math.max(existing?.progress ?? 40, 40)
+              : 10,
+          createdAt: bj.created_at || existing?.createdAt || new Date().toISOString(),
+          completedAt: bj.completed_at || existing?.completedAt,
+          error: bj.error || existing?.error,
+        };
+        localMap.set(bj.job_id, updated);
+      }
     }
 
     const merged = Array.from(localMap.values()).sort(

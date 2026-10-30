@@ -3,17 +3,21 @@ import { NavLink, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, Sparkles, Briefcase, GitBranch,
-  Settings, ChevronLeft, Video, Film, Clapperboard, Volume2
+  Settings, ChevronLeft, Video, Film, Clapperboard, Volume2, Replace
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
   { to: '/workflow', icon: Sparkles, label: 'Create' },
-  { to: '/ltx', icon: Film, label: 'LTX Generation' },
-  { to: '/minimax', icon: Clapperboard, label: 'MiniMax H3' },
   { to: '/voices', icon: Volume2, label: 'Generate Voices' },
+  { to: '/characterswap', icon: Replace, label: 'Character Swap' },
   { to: '/jobs', icon: Briefcase, label: 'Jobs' },
   { to: '/architecture', icon: GitBranch, label: 'Architecture' },
+];
+
+const DISABLED_ITEMS = [
+  { to: '/ltx', icon: Film, label: 'LTX 2.5' },
+  { to: '/minimax', icon: Clapperboard, label: 'MiniMax H3' },
 ];
 
 interface SidebarProps {
@@ -157,6 +161,58 @@ export function Sidebar({ collapsed, onToggle, onSettingsOpen }: SidebarProps) {
 
       {/* Bottom */}
       <div className="px-2 pb-4 space-y-1 flex-shrink-0">
+        {/* Disabled services (kept reachable, marked as off) */}
+        {!collapsed && (
+          <div
+            style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.1em',
+              color: 'rgba(255,255,255,0.2)',
+              padding: '4px 12px 2px',
+            }}
+          >
+            DISABLED
+          </div>
+        )}
+        {DISABLED_ITEMS.map(({ to, icon: Icon, label }) => (
+          <NavLink key={to} to={to}>
+            <div
+              className="flex items-center gap-3 px-3 rounded-xl cursor-pointer"
+              style={{
+                minHeight: 30,
+                opacity: 0.55,
+                justifyContent: collapsed ? 'center' : 'flex-start',
+              }}
+              title={`${label} (disabled)`}
+            >
+              <Icon size={13} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+              {!collapsed && (
+                <>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', flex: 1, whiteSpace: 'nowrap' }}>
+                    {label}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '8px',
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      borderRadius: 8,
+                      background: 'rgba(148,163,184,0.12)',
+                      border: '1px solid rgba(148,163,184,0.25)',
+                      color: 'rgba(148,163,184,0.8)',
+                    }}
+                  >
+                    OFF
+                  </span>
+                </>
+              )}
+            </div>
+          </NavLink>
+        ))}
+
+        <div style={{ height: 6 }} />
+
         {/* Settings */}
         <motion.button
           onClick={onSettingsOpen}
@@ -253,6 +309,8 @@ export function MobileBottomNav({ onSettingsOpen }: { onSettingsOpen: () => void
                   ? 'MiniMax'
                   : label === 'Generate Voices'
                   ? 'Voices'
+                  : label === 'Character Swap'
+                  ? 'Swap'
                   : label}
               </span>
             </div>

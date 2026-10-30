@@ -5,6 +5,7 @@ import { WorkflowPage } from './pages/WorkflowPage';
 import { LtxPage } from './pages/LtxPage';
 import { MinimaxPage } from './pages/MinimaxPage';
 import { VoicesPage } from './pages/VoicesPage';
+import { CharacterSwapPage } from './pages/CharacterSwapPage';
 import { JobsPage } from './pages/JobsPage';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
       { path: 'ltx', Component: LtxPage },
       { path: 'minimax', Component: MinimaxPage },
       { path: 'voices', Component: VoicesPage },
+      { path: 'characterswap', Component: CharacterSwapPage },
       { path: 'jobs', Component: JobsPage },
       { path: 'architecture', Component: ArchitecturePage },
     ],

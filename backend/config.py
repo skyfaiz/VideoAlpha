@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str
     S3_REGION: str = "eu-ro-1"
 
+    # RunningHub (Character Swap AI app)
+    RUNNINGHUB_API_KEY: str = ""
+    RUNNINGHUB_BASE_URL: str = "https://www.runninghub.ai"
+    RUNNINGHUB_CHARSWAP_APP_ID: str = "2062826985356881922"
+
     # Amazon Polly (AWS)
     AWS_DEFAULT_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""
