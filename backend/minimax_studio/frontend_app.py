@@ -129,7 +129,7 @@ RUNPOD_MCP_URL = os.environ.get("RUNPOD_MCP_URL", "https://mcp.runpod.io/").stri
 
 MINIMAX_POD_NAME = os.environ.get("MINIMAX_POD_NAME", "minimax-h3-pod").strip()
 MINIMAX_POD_IMAGE = os.environ.get(
-    "MINIMAX_POD_IMAGE", "hearmeman/comfyui-minimax-template:v10"
+    "MINIMAX_POD_IMAGE", "hearmeman/comfyui-minimax-template:v9"
 ).strip()
 MINIMAX_VOLUME_ID = os.environ.get(
     "MINIMAX_VOLUME_ID", "cmvue1yty000007jv0jvzgsrn"
@@ -1188,6 +1188,16 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
                 "minCudaVersion": "13.0",
             },
             "env": pod_env,
+            # The runtime launches ComfyUI nohup'ed to a per-pod log on the
+            # volume, so pod stdout (what stream-pod-logs and the UI show)
+            # goes silent after boot. Wrap the image CMD: run start_script.sh
+            # in the background and tail the ComfyUI log into stdout so job
+            # progress stays visible in the pod logs and the UI.
+            "args": (
+                "bash -c '/start_script.sh & "
+                "exec tail -n +1 -F "
+                "/workspace/comfyui_${RUNPOD_POD_ID}_nohup.log'"
+            ),
         }
         if dc_id:
             create_body["dataCenterIds"] = [dc_id]
