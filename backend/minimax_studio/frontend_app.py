@@ -1144,6 +1144,10 @@ async def deploy_pod_endpoint(request: PodDeployRequest) -> dict[str, Any]:
             if request.download_viggle_animate
             else "false",
             "HF_TOKEN": MINIMAX_HF_SECRET_REF,
+            # Global volumes turn staged symlinks into 0-byte files and
+            # volume_sync cannot replace them (EPERM). Staging downloads
+            # beside the destination writes real files via os.replace.
+            "HF_STAGE_LOCAL": "0",
         }
         if DEFAULT_OPENROUTER_API_KEY:
             pod_env["OPENROUTER_API_KEY"] = DEFAULT_OPENROUTER_API_KEY
