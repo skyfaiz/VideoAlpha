@@ -14,7 +14,7 @@ from urllib.parse import urlencode, urlsplit
 
 import aiohttp
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.requests import Request
@@ -274,6 +274,19 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="MiniMax H3 Studio & Pod Controller", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
+
+
+@app.exception_handler(asyncio.TimeoutError)
+async def upstream_timeout_handler(request: Request, exc: asyncio.TimeoutError):
+    return JSONResponse(
+        status_code=504,
+        content={
+            "detail": (
+                "Timed out waiting for the pod's ComfyUI or RunPod API. "
+                "The pod may be dead, restarting, or busy — check Pod Control status."
+            )
+        },
+    )
 
 
 @app.middleware("http")
